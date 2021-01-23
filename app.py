@@ -1,193 +1,28 @@
-# -*- coding: utf-8 -*-
-
-# Run this app with `python app.py` and
-# visit http://127.0.0.1:8050/ in your web browser.
-
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
-import plotly.graph_objs as go
+
 import plotly
+import plotly.graph_objs as go
+
 import numpy as np
-import json
-import math
+
+import json, math
 from urllib.parse import parse_qs
+
+import engine
 
 app = dash.Dash(__name__)
 
-snap_threshold = 4
-
-def create_canvas():
-    start, end = -100, 100
-    length = end - start + 1
-    base = np.linspace(start, end, length, dtype=np.int32)
-    data = np.hstack((np.repeat(base, length).reshape((-1, 1)), np.tile(base, length).reshape((-1, 1))))
-
-    fig = go.Figure(data=go.Scattergl(
-        x = data[:, 0],
-        y = data[:, 1],
-        mode='markers',
-        opacity=0
-    ), 
-    layout=go.Layout(
-        yaxis=go.layout.YAxis(scaleanchor='x', range=[-100, 100]),
-        xaxis=go.layout.XAxis(range=[-100, 100])
-    ))
-    return fig
-
-app.layout = html.Div(children=[
+app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
-    dcc.Graph(
-        id='draw_polygon_graph', 
-        style={'width': '50vw', 'height': '50vw', 'margin': 'auto'},
-        config={'displayModeBar': False},
-        figure=create_canvas()), 
-    html.Div(className='row', children=[
-        html.Div([
-            dcc.Markdown("""
-                **Hover Data**
-
-                Mouse over values in the graph.
-            """),
-            html.Pre(id='hover-data')
-        ], className='three columns'),
-
-        html.Div([
-            dcc.Markdown("""
-                **Click Data**
-
-                Click on points in the graph.
-            """),
-            html.Pre(id='click-data'),
-        ], className='three columns')]),
-    html.Div(id='draw_polygon_data', style={'display': 'none'}),
-    html.Div(id='draw_polygon_graph_data', style={'display': 'none'}, children=plotly.io.to_json(create_canvas()))
-])
-
-# points = np.array([]).reshape((-1, 2)).astype(np.int32)
+    html.Div(id='page_content')])
 
 @app.callback(
-    Output('draw_polygon_data', 'children'),
-    Output('draw_polygon_graph', 'figure'),
-    Input('draw_polygon_graph', 'hoverData'), 
-    Input('draw_polygon_graph', 'clickData'),
-    State('draw_polygon_data', 'children'),
-    State('draw_polygon_graph', 'figure'))
-def update_draw_polygon(hoverData, clickData, data, fig):
-    data = json.loads(data or 'null')
-    fig = go.Figure(**fig)
-
-    if not data:
-        data = {
-            'points': [],
-            'finish': False
-            }
-
-    points = np.array(data['points']).reshape((-1, 2))
-
-    if not data['finish'] and clickData:
-        point = np.array([clickData['points'][0]['x'], clickData['points'][0]['y']])
-
-        if len(points) > 1 and math.dist(point, points[0]) < snap_threshold:
-            data['finish'] = True
-
-            fig.update_traces(
-                        x=points[:, 0],
-                        y=points[:, 1],
-                        fill='toself',
-                        selector={'uid': 'polygon_layer'})
-        elif not any(all(p == point) for p in points):
-            points = np.vstack((points, point))
-
-            data['points'] = points.tolist()
-
-            if len(points) == 1:
-                fig.add_trace(go.Scattergl(
-                    x=points[:, 0],
-                    y=points[:, 1],
-                    mode='lines',
-                    opacity=1,
-                    uid='polygon_layer'))
-            else:
-                fig.update_traces(
-                    x=points[:, 0],
-                    y=points[:, 1],
-                    selector={'uid': 'polygon_layer'})
-
-    # if hoverData:
-    #     point = np.array([hoverData['points'][0]['x'], hoverData['points'][0]['y']])
-    #     hover_points = np.vstack((points, point))
-
-    #     if len(points) > 1 and math.dist(point, points[0]) < snap_threshold:
-    #         point = points[0]
-
-    #     if len(hover_points) > 1:
-    #         fig.update_traces(
-    #             x=hover_points[:, 0],
-    #             y=hover_points[:, 1],
-    #             selector={'uid': 'polygon_layer'})
-
-    return json.dumps(data), fig
-
-# @app.callback(
-#     Output('draw_polygon_graph', 'figure'),
-#     Input('data', 'children'))
-# def update_graph(data):
-#     data = json.loads(data)
-
-
-#     if clickData:
-#         point = np.array([clickData['points'][0]['x'], clickData['points'][0]['y']], dtype=np.int32)
-
-#         if len(points) > 1 and np.linalg.norm(point-points[0]) < snap_threshold:
-#             point = points[0]
-#             fig.update_traces(
-#                     x=points[:, 0],
-#                     y=points[:, 1],
-#                     selector={'uid': 'polygon_layer'})
-
-#         elif not any(all(p == point) for p in points):
-#             points = np.vstack((points, point))
-#             if len(points) == 1:
-#                 fig.add_trace(go.Scattergl(
-#                     x=points[:, 0],
-#                     y=points[:, 1],
-#                     mode='lines',
-#                     opacity=1,
-#                     uid='polygon_layer'))
-#             else:
-#                 fig.update_traces(
-#                     x=points[:, 0],
-#                     y=points[:, 1],
-#                     selector={'uid': 'polygon_layer'})
-#     if hoverData:
-#         point = np.array([hoverData['points'][0]['x'], hoverData['points'][0]['y']], dtype=np.int32)
-
-#         if len(points) > 1 and np.linalg.norm(point-points[0]) < snap_threshold:
-#             point = points[0]
-
-#         hover_points = np.vstack((points, point))
-#         if len(hover_points) > 1:
-#             fig.update_traces(
-#                 x=hover_points[:, 0],
-#                 y=hover_points[:, 1],
-#                 selector={'uid': 'polygon_layer'})
-#     return fig
-
-@app.callback(
-    Output('hover-data', 'children'),
-    Input('draw_polygon_graph', 'hoverData'),
-    State('draw_polygon_data', 'children'),
-    State('draw_polygon_graph', 'figure'))
-def display_hover_data(hoverData, data, fig):
-    # return json.dumps(fig, indent=2)
-    return data
-
-@app.callback(
-    Output('click-data', 'children'),
+    Output('page_content', 'children'),
     Input('url', 'search'))
-def display_click_data(search):
+def display_feeder(search: str):
     if search and search[0] == '?':
         search = search[1:]
     points = parse_qs(search)
@@ -196,7 +31,125 @@ def display_click_data(search):
     assert 'y' in points
     assert len(points['x']) == len(points['y'])
 
-    
+    x = list(map(int, points['x']))
+    y = list(map(int, points['y']))
+
+    points = np.hstack((np.array(x).reshape((-1, 1)), np.array(y).reshape((-1, 1))))
+    points = engine.scale_and_center_polygon(points)
+
+    return create_page(points)
+
+def create_page(points):
+
+    convex_hull = engine.convex_hull(points)
+    antipodal_pairs = engine.antipodal_pairs(convex_hull)
+    piecewise_func, diameter_func = engine.make_diameter_function(convex_hull)
+    maxima, minima = engine.find_extrema(piecewise_func, diameter_func)
+    squeeze_func = engine.make_squeeze_func(piecewise_func, diameter_func)
+
+    ch_graph = create_graph_from_figure(create_convex_hull_figure(points, convex_hull), 'ch_fig')
+    ap_graph = create_graph_from_figure(create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs), 'ap_fig')
+    dia_graph = create_graph_from_figure(create_diameter_figure(diameter_func, minima, maxima), 'dia_fig')
+    sq_graph = create_graph_from_figure(create_squeeze_figure(squeeze_func), 'sq_fig')
+    return [ch_graph, ap_graph, dia_graph, sq_graph]
+
+def create_convex_hull_figure(points, convex_hull):
+    draw_points = np.vstack((points, points[0]))
+    draw_ch = np.vstack((convex_hull, convex_hull[0]))
+
+    convex_hull_fig = create_base_figure()
+    convex_hull_fig.add_trace(go.Scatter(
+        x=draw_points[:, 0],
+        y=draw_points[:, 1],
+        mode='lines',
+        fill='toself'))
+    convex_hull_fig.add_trace(go.Scatter(
+        x=draw_ch[:, 0],
+        y=draw_ch[:, 1],
+        mode='lines',
+        line=go.scatter.Line(color='black')
+    ))
+
+    return convex_hull_fig
+
+def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
+    draw_points = np.vstack((points, points[0]))
+    draw_ch = np.vstack((convex_hull, convex_hull[0]))
+
+    fig = create_base_figure()
+
+    fig.add_trace(go.Scatter(
+        x=draw_points[:, 0],
+        y=draw_points[:, 1],
+        mode='lines',
+        fill='toself'))
+    for p1, p2 in antipodal_pairs:
+        x1, y1 = convex_hull[p1]
+        x2, y2 = convex_hull[p2]
+        fig.add_trace(go.Scatter(
+            x=[x1, x2], 
+            y=[y1, y2],
+            mode='lines',
+            line=go.scatter.Line(color='black')
+        ))
+    return fig
+
+def create_diameter_figure(diameter_func, minima, maxima):
+    fig = go.Figure(layout=go.Layout(showlegend=False))
+
+    x = np.linspace(0, 2*np.pi, 1000, endpoint=False)
+    y = np.array([diameter_func(t) for t in x])
+
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=y,
+        mode='lines',
+        line=go.scatter.Line(color='black')))
+
+    for e in minima:
+        fig.add_trace(go.Scatter(
+            x=[e, e],
+            y=[0, diameter_func(e)],
+            mode='lines',
+            line=go.scatter.Line(color='blue')))
+
+    for e in maxima:
+        fig.add_trace(go.Scatter(
+            x=[e, e],
+            y=[0, diameter_func(e)],
+            mode='lines',
+            line=go.scatter.Line(color='red')))
+
+    return fig
+
+def create_squeeze_figure(squeeze_func):
+    x = np.linspace(0, 2*np.pi, 1000)
+    y = np.array([squeeze_func(t) for t in x])
+
+    fig = create_base_figure()
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=y,
+        mode='lines',
+        line=go.scatter.Line(color='black')))
+
+    return fig
+
+def create_base_figure():
+    fig = go.Figure(
+        layout=go.Layout(
+            yaxis=go.layout.YAxis(scaleanchor='x'),
+            showlegend=False))
+    return fig
+
+def create_graph_from_figure(figure, id):
+    graph = dcc.Graph(
+        id=id, 
+        figure=figure,
+        style={'width': '50vw', 'height': '50vw', 'margin': 'auto'},
+        config={'displayModeBar': False})
+
+    return graph
 
 if __name__ == '__main__':
     app.run_server(debug=True)
