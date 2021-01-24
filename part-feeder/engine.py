@@ -1,3 +1,7 @@
+"""
+This module contains functions related to the algorithm itself.
+"""
+
 import numpy as np
 import traceback, functools, pprint, math, random
 
@@ -406,3 +410,142 @@ def make_push_grasp_function(piecewise_diameter, piecewise_radius, domain=(0, 2*
         push_grasp_func.append(next_piece)
         
     return push_grasp_func
+
+class Interval:
+    """
+    Implementation of a s-interval as defined in Goldberg (1993). 
+    
+    abs(interval) returns the lebesgue measure of the interval
+    """
+    def __init__(self, a, b, image):
+        self.a = a
+        self.b = b
+        self.image = image
+        
+    def __abs__(self):
+        return self.b - self.a
+    
+    def __repr__(self):
+        return f'Interval({(self.a)}, {(self.b)}, {repr(self.image)})'
+        
+        # return f'Interval({round(self.a, 3)}, {round(self.b, 3)}, {repr(self.image)})'
+    
+class Image:
+    """
+    Implementation of an s-image as defined in Goldberg (1993).
+    
+    abs(image) returns the lebesgue measure of the image.
+    """
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+        
+    def __abs__(self):
+        return self.b - self.a
+    
+    def __repr__(self):
+        return f'Image({round(self.a, 3)}, {round(self.b, 3)})'
+
+def generate_intervals(transfer_func):
+    """
+    Returns a list of s-intervals used to recover the plan using the algorithm described
+    in Goldberg (1993). 
+    
+    transfer_func must be either a squeeze or a push-grasp function.
+    """
+    
+    intervals = []
+    
+    # Step 2 of algorithm: find widest single step
+    max_single_step = Interval(0, 0, None)
+    for a, b, t in transfer_func:
+        if b-a > abs(max_single_step) and not np.isclose(b-a, abs(max_single_step)):
+            max_single_step = Interval(a, b, Image(t, t))
+            
+    intervals.append(max_single_step)
+    
+    # For step 3, we need to generate all possible s-intervals with nonzero measure
+    all_intervals = []
+    for i in range(len(transfer_func)-1):
+        for j in range(i+1, len(transfer_func)):
+            image = Image(transfer_func[i][2], transfer_func[j][2])
+            interval = Interval(transfer_func[i][0], transfer_func[j][1], image)
+            all_intervals.append(interval)
+    
+    # For step 3, we also need to compute the periodicity in the transfer (squeeze or push-grasp)
+    # function, which is the termination condition for the loop in step 3 of the algorithm.
+    T = transfer_func_periodicity(transfer_func, default_T=np.pi)
+
+    # Step 3: Generate list of intervals
+    while not np.isclose(abs(intervals[-1]), T):
+        
+        # Part 1: get all intervals with a smaller image than the width of the last interval
+        valid_ints = []
+        for i in all_intervals:
+            if abs(i.image) < abs(intervals[-1]):
+                valid_ints.append(i)
+                
+        # pprint.pprint(valid_ints)
+        
+        # Part 2: set the next interval to the widest such interval
+        widest = valid_ints[0]
+        for i in valid_ints[1:]:
+            if abs(i) > abs(widest):
+                widest = i
+            elif np.isclose(abs(i), abs(widest)) and \
+                abs(i.image) < abs(widest.image) and \
+                not np.isclose(abs(i.image), abs(widest.image)):
+                # this block deals with ties for the largest interval by picking the interval
+                # with the smallest image. 
+                widest = i
+                
+        all_intervals.remove(widest)
+        intervals.append(widest)
+    
+    return intervals
+    
+def period_from_r_fold(r):
+    """
+    Returns the period of a polygon's squeeze function given the n-fold (called r-fold in the paper) 
+    rotational symmetry of the polygon. Equation is given in Goldberg (1993).
+    """
+    return 2*np.pi/(r*(1+r%2))
+
+def transfer_func_periodicity(transfer_func, max_r=8, default_T=2*np.pi):
+    """
+    Returns the period of the passed transfer function.
+    
+    For objects with no rotational symmetry, the period for the squeeze function will be pi
+    and push-grasp function will be 2pi. 
+    """
+    res_T = default_T
+    
+    transfer_func_callable =  make_transfer_callable(transfer_func, domain=(0, 2*np.pi))
+    
+    x = np.linspace(0, 2*np.pi, 1000)
+    y = np.array([transfer_func_callable(t) for t in x])
+    for r in range(2, max_r+1):
+        T = period_from_r_fold(r)
+        
+        x_shift = (x + T) % (2*np.pi)
+        y_shift = np.array([transfer_func_callable(t) for t in x_shift]) % (2*np.pi)
+        
+        if all(np.isclose((y+T)%(2*np.pi), y_shift)):
+            res_T = T
+            
+    return res_T
+
+def generate_plan(intervals):
+    """
+    Generates a plan from a list of intervals using the method outlined in Goldberg (1993). 
+    """
+    
+    plan = [0]
+    
+    for i in reversed(range(len(intervals)-1)):
+        eps = (abs(intervals[i]) - abs(intervals[i+1].image))/2
+        # alpha = intervals[i+1].image.a - intervals[i].a - eps + plan[-1]
+        alpha = plan[-1] - (intervals[i+1].image.a - intervals[i].a - eps)
+        plan.append(alpha)
+        
+    return plan

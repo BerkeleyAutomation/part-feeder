@@ -1,5 +1,9 @@
 import dash_core_components as dcc
 
+"""
+This module contains all the explanations present on the 'generate plan' webpage. 
+"""
+
 ch_ap = dcc.Markdown('''
 ## The Polygon
 
@@ -65,4 +69,13 @@ pg = dcc.Markdown('''
 The push-grasp function is computed by composing the push function with the squeeze function. This
 function (more specifically, its discontinuities) are used to generate a plan to orient the part
 up to symmetry.
+''')
+
+anim = dcc.Markdown('''
+## The Animation
+
+Now let's take a look at the algorithm in action! The algorithm, using information computed from the
+series of plots above, generates a series of squeezing actions that orient the part *up to symmetry*.
+For most arbitrary polygons with no rotational symmetry, this usually means that the part will be
+oriented at some angle theta or theta+pi/2. As you can see in the animation below, that is the case!
 ''')

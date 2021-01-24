@@ -24,10 +24,8 @@
         <h2>Orienting Polygonal Parts without Sensors: An Implementation in Python</h2>
         <br>
         This website is an implementation of <a href="https://goldberg.berkeley.edu/">Prof. Ken Goldberg's</a>
-        1993 PhD thesis, <a href="https://goldberg.berkeley.edu/pubs/algo93.pdf">Orienting Polygonal Parts Without Sensors</a>
+        1993 PhD thesis, <a href="https://goldberg.berkeley.edu/pubs/algo93.pdf">Orienting Polygonal Parts Without Sensors</a>.
         To begin, click to draw a polygon, then press "Generate Plan" to see the algorithm in action.
-        <br>
-        <button id=done>Finish</button>
         <br>
         <canvas id="canvas" width=800px height=800px></canvas>
         <br>
@@ -53,10 +51,6 @@
         var coordinates = [];
         var isDone = false;
         var eps = 10
-
-        $('#done').click(function(){
-            isDone=true;
-        });
 
         $("#canvas").mousedown(function(e){handleMouseDown(e);});
         $("#canvas").mousemove(function(e){handleMouseMove(e);});

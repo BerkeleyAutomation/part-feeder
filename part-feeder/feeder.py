@@ -13,9 +13,12 @@ from urllib.parse import parse_qs
 
 from . import engine
 from . import explanations
+from . import anim
+
+displays = {}
 
 def init_feeder(server):
-    """Create a Plotly Dash dashboard."""
+    """Create the plots using plotly and dash."""
     dash_app = dash.Dash(
         server=server,
         routes_pathname_prefix='/feeder/'
@@ -23,7 +26,15 @@ def init_feeder(server):
 
     dash_app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
-        html.Div(id='page_content')
+        html.Div(id='page_content'),
+        dcc.Interval(
+            id='update_interval',
+            interval=20,
+            ),
+        dcc.Graph(
+            id='anim', 
+            style={'height': '50vw', 'margin': 'auto'},
+            config={'displayModeBar': False})
         ])
 
     init_callbacks(dash_app)
@@ -36,6 +47,9 @@ def init_callbacks(app):
         Output('page_content', 'children'),
         Input('url', 'search'))
     def display_feeder(search: str):
+        """
+        This parses a list of vertices describing a polygon from the query string in the URL.
+        """
         if search and search[0] == '?':
             search = search[1:]
         points = parse_qs(search)
@@ -47,12 +61,35 @@ def init_callbacks(app):
         x = list(map(int, points['x']))
         y = list(map(int, points['y']))
 
-        points = np.hstack((np.array(x).reshape((-1, 1)), np.array(y).reshape((-1, 1))))
+        points = np.hstack((np.array(x).reshape((-1, 1)), np.array(y).reshape((-1, 1)))) * np.array([1, -1])
         points = engine.scale_and_center_polygon(points)
 
-        return create_page(points)
+        return create_page(points, search)
 
-def create_page(points):
+    @app.callback(
+        Output('anim', 'figure'),
+        Input('update_interval', 'n_intervals'),
+        State('url', 'search'))
+    def update_anim(n, search):
+        if search and search[0] == '?':
+            search = search[1:]
+
+        ### TODO one display per session
+        d = displays.get(search, None)
+        if d is not None:
+            d.step(n)
+            return d.draw()
+
+        else:
+            fig = go.Figure(
+                layout=go.Layout(
+                    xaxis=go.layout.XAxis(range=(-50, 50)),
+                    yaxis=go.layout.YAxis(scaleanchor='x', range=(-50, 50)),
+                    showlegend=False))
+
+            return fig
+
+def create_page(points, hash_str):
     s_domain = (0, 2*np.pi)     # s_domain refers to all squeeze function related domains
     pg_domain = (0, 4*np.pi)    # pg_domain refers to all push-grasp function related domains
 
@@ -85,6 +122,14 @@ def create_page(points):
         dia_extended, piecewise_radius_range, domain=pg_domain)
     push_grasp_callable = engine.make_transfer_callable(push_grasp_func, domain=pg_domain)
 
+    # generate plan
+    intervals = engine.generate_intervals(squeeze_func)
+    plan = engine.generate_plan(intervals)
+
+    # create display
+    d = anim.Display(points, plan, diameter_callable, squeeze_callable)
+    displays[hash_str] = d
+
     # Create figures
     ch_ap_graph = create_graph_from_figure(
         create_antipodal_pairs_figure(points, ch, antipodal_pairs), 'ch_ap_fig')
@@ -106,7 +151,8 @@ def create_page(points):
             explanations.sq, sq_graph,
             explanations.rad, rad_graph,
             explanations.pu, pu_graph,
-            explanations.pg, pg_graph]
+            explanations.pg, pg_graph,
+            explanations.anim]
 
 def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
     draw_points = np.vstack((points, points[0]))
