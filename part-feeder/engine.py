@@ -446,7 +446,7 @@ class Image:
     def __repr__(self):
         return f'Image({round(self.a, 3)}, {round(self.b, 3)})'
 
-def generate_intervals(transfer_func):
+def generate_intervals(transfer_func, default_T=np.pi):
     """
     Returns a list of s-intervals used to recover the plan using the algorithm described
     in Goldberg (1993). 
@@ -474,7 +474,7 @@ def generate_intervals(transfer_func):
     
     # For step 3, we also need to compute the periodicity in the transfer (squeeze or push-grasp)
     # function, which is the termination condition for the loop in step 3 of the algorithm.
-    T = transfer_func_periodicity(transfer_func, default_T=np.pi)
+    T = transfer_func_periodicity(transfer_func, default_T=default_T)
 
     # Step 3: Generate list of intervals
     while not np.isclose(abs(intervals[-1]), T):

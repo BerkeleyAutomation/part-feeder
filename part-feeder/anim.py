@@ -7,20 +7,10 @@ import numpy as np
 import pymunk
 from pymunk.vec2d import Vec2d
 
-import math, random, functools, traceback
+import math, random
 
 import plotly.graph_objs as go
 import plotly
-
-def print_errors_to_stdout(fun):
-    @functools.wraps(fun)
-    def wrapper(*args,**kw):
-        try:
-            return fun(*args,**kw)
-        except Exception:
-            traceback.print_exc()
-            raise
-    return wrapper
 
 class Gripper:
     """A pair of parallel plate grippers"""
@@ -76,14 +66,17 @@ class Gripper:
         return body, segment
     
     def squeeze(self):
-        self.reset_pos_func()
-        
         self.bot.velocity = self.bot_vel
         self.top.velocity = self.top_vel
         
     def unsqueeze(self):
         self.bot.velocity = -self.bot_vel
         self.top.velocity = -self.top_vel
+
+    def push(self):
+        self.bot.velocity = self.bot_vel
+    def grasp(self):
+        self.top.velocity = self.top_vel
     
     def stop(self):
         self.bot.velocity = 0, 0
@@ -158,12 +151,7 @@ class Polygon:
 class Display:
     """Display class controls the simulation"""
     
-    MOVE_PART_TIME = 200
-    SQUEEZE_PART_TIME = 150
-    UNSQUEEZE_PART_TIME = 150
-    TOTAL_TIME = MOVE_PART_TIME + SQUEEZE_PART_TIME + UNSQUEEZE_PART_TIME
-    
-    def __init__(self, points, angles, diameter_callable, squeeze_callable):
+    def __init__(self, points, angles):
         self.angles = angles
         self.points = points
         
@@ -182,13 +170,8 @@ class Display:
         self.init_grippers()    
         self.polygons = []
         
-        self.grippers_min_dist = []
-        self.polygon_rotate_dist = []
-
-        self.diameter_callable = diameter_callable
-        self.squeeze_callable = squeeze_callable
-        
     def init_grippers(self):
+        """Initializes the grippers according to their angles and adds them to the space."""
         self.grippers = []
         
         for angle, xpos in zip(self.angles, self.gripper_pos):
@@ -199,11 +182,97 @@ class Display:
             self.space.add(g.bot, g.bot_seg)
     
     def add_polygon(self):
+        """Add a polygon to the space. Polygon angles are randomly sampled from [0, 2*pi)."""
         p = Polygon(self.start_pos, 0, self.points)
         self.polygons.insert(0, p)
         self.space.add(p.body, p.poly)
-    
-    @print_errors_to_stdout  
+      
+    def step(self, dt):
+        """
+        This method should be overridden by subclasses. Squeeze plans and Push-grasp plans have
+        different animation timing and steps.
+        """
+        raise NotImplementedError
+
+    def draw(self):
+        """
+        Returns a plotly figure drawing the current space. This was made specifically to draw the
+        animations, so only supports segments and polygons.
+        """
+        
+        fig = go.Figure(
+            layout=go.Layout(
+                xaxis=go.layout.XAxis(range=self.xlim),
+                yaxis=go.layout.YAxis(scaleanchor='x', range=self.ylim),
+                showlegend=False))
+
+        for shape in self.space.shapes:
+            theta = shape.body.angle
+
+            # rotation matrix
+            s, c = np.sin(theta), np.cos(theta)
+            matrix = np.array([[c, -s],
+                              [s, c]])
+
+            # body position in world coordinates
+            x, y = shape.body.position
+            pos = np.array([x, y]).reshape((2, 1))
+
+            if type(shape) is pymunk.Segment:
+                x1, y1 = shape.a
+                x2, y2 = shape.b
+
+                # segment endpoints in local coordinates
+                points = np.array(
+                    [[x1, x2],
+                    [y1, y2]])
+
+                rotated = np.dot(matrix, points) + pos
+
+                line = go.Scatter(
+                    x=rotated[0],
+                    y=rotated[1],
+                    mode='lines',
+                    line=go.scatter.Line(
+                        color='black',
+                        width=2*shape.radius))
+
+                fig.add_trace(line)
+
+            elif type(shape) is pymunk.Poly:
+                rotated = np.dot(matrix, self.points.T) + pos
+
+                poly = go.Scatter(
+                    x=rotated[0],
+                    y=rotated[1],
+                    mode='lines',
+                    fill='toself',
+                    line=go.scatter.Line(
+                        color='blue'))
+                fig.add_trace(poly)
+
+        return fig
+
+
+class SqueezeDisplay(Display):
+    """
+    SqueezeDisplay inherits Display base class. Generates a squeeze plan animation.
+    """
+
+    MOVE_PART_TIME = 200
+    SQUEEZE_PART_TIME = 150
+    UNSQUEEZE_PART_TIME = 150
+    TOTAL_TIME = MOVE_PART_TIME + SQUEEZE_PART_TIME + UNSQUEEZE_PART_TIME
+
+    def __init__(self, points, angles, diameter_callable, squeeze_callable):
+        super().__init__(points, angles)
+
+        self.grippers_min_dist = []
+        self.polygon_rotate_dist = []
+
+        self.diameter_callable = diameter_callable
+        self.squeeze_callable = squeeze_callable
+
     def step(self, dt):
         dt = dt % 500
         if dt == 0:
@@ -273,55 +342,114 @@ class Display:
         for x in range(10):
             self.space.step(1/50/10)
 
-    def draw(self):
-        """Returns a plotly figure drawing the current space. """
-        
-        fig = go.Figure(
-            layout=go.Layout(
-                xaxis=go.layout.XAxis(range=self.xlim),
-                yaxis=go.layout.YAxis(scaleanchor='x', range=self.ylim),
-                showlegend=False))
+class PushGraspDisplay(Display):
+    """
+    PushGraspDisplay class inherits from Display base class. Generates a push-grasp plan animation.
+    """
 
-        for shape in self.space.shapes:
-            theta = shape.body.angle
+    MOVE_PART_TIME = 200
+    PUSH_PART_TIME = 150
+    SQUEEZE_PART_TIME = 150
+    UNSQUEEZE_PART_TIME = 150
+    TOTAL_TIME = MOVE_PART_TIME + PUSH_PART_TIME + SQUEEZE_PART_TIME + UNSQUEEZE_PART_TIME
 
-            s, c = np.sin(theta), np.cos(theta)
-            matrix = np.array([[c, -s],
-                              [s, c]])
+    def __init__(self, points, angles, radius_callable, diameter_callable, push_callable, push_grasp_callable):
+        super().__init__(points, angles)
 
-            x, y = shape.body.position
-            pos = np.array([x, y]).reshape((2, 1))
+        self.gripper_push_dist = []
+        self.gripper_squeeze_dist = []
 
-            if type(shape) is pymunk.Segment:
-                x1, y1 = shape.a
-                x2, y2 = shape.b
+        self.polygon_pins = []      # PivotJoint constraint to simulate part rotating after being
+                                    # pushed by one plate
 
-                points = np.array(
-                    [[x1, x2],
-                    [y1, y2]])
+        self.radius_callable = radius_callable
+        self.diameter_callable = diameter_callable
+        self.push_callable = push_callable
+        self.push_grasp_callable = push_grasp_callable
 
-                rotated = np.dot(matrix, points) + pos
+    def step(self, dt):
+        dt = dt % 650
+        if dt == 0:
+            # init move phase
+            # create a new box; start moving all boxes to next one
+            self.add_polygon()
 
-                line = go.Scatter(
-                    x=rotated[0],
-                    y=rotated[1],
-                    mode='lines',
-                    line=go.scatter.Line(
-                        color='black',
-                        width=2*shape.radius))
+            for p in self.polygons:
+                p.reset_vel_func()
+                p.move()
+        elif 0 + 50 < dt < 200:
+            # move phase
+            
+            # stop polygons when they are in between a gripper
+            if self.polygons and (b := self.polygons[-1].body).position.x >= self.del_pos:
+                self.space.remove(b, *b.shapes)
+                self.polygons.pop()
+            for p in self.polygons:
+                if any(np.abs(p.body.position.x-self.gripper_pos) < 3):
+                    p.body.velocity = 0, 0
+        elif dt == 200: 
+            # init push phase
+            self.space.damping = 0
+            
+            self.gripper_push_dist = [50] * len(self.grippers)
+            self.gripper_squeeze_dist = [50] * len(self.grippers)
+            self.polygon_pins = []
+            for i, p in enumerate(self.polygons[:len(self.grippers)]):
+                p.squeeze()
+                rel_angle = (self.grippers[i].angle % (2*np.pi) - p.body.angle % (2*np.pi)) % (2*np.pi)
+                
+                # minimum pushing distance
+                self.gripper_push_dist[i] = self.radius_callable(self.push_callable(rel_angle))
 
-                fig.add_trace(line)
+                # minimum squeezing distance
+                self.gripper_squeeze_dist[i] = self.diameter_callable(self.push_grasp_callable(rel_angle))
 
-            elif type(shape) is pymunk.Poly:
-                rotated = np.dot(matrix, self.points.T) + pos
+                # lock polygon in place for push action
+                pin = pymunk.PivotJoint(p.body, self.space.static_body, p.body.position)
+                self.space.add(pin)
+                self.polygon_pins.append(pin)
 
-                poly = go.Scatter(
-                    x=rotated[0],
-                    y=rotated[1],
-                    mode='lines',
-                    fill='toself',
-                    line=go.scatter.Line(
-                        color='blue'))
-                fig.add_trace(poly)
+            for g in self.grippers:
+                g.push()      
+        elif 200 < dt < 350:
+            # push phase  
+            for i, g in enumerate(self.grippers): 
+                if i < len(self.polygons):
+                    distance = g.bot.position.get_distance(self.polygons[i].body.position)
+                else:
+                    distance = g.bot.position.get_distance(g.bot_pos)
 
-        return fig
+                if abs(distance - self.gripper_push_dist[i]) < 2:
+                    g.stop()
+
+        elif dt == 350:
+            # init squeeze phase
+            # remove locking pivotjoint constraints and start sqeeze/grasping phase
+            for p in self.polygon_pins:
+                self.space.remove(p)
+            for g in self.grippers:
+                g.grasp()
+        elif 350 < dt < 500  :
+            # squeeze phase
+            for i, g in enumerate(self.grippers):
+                distance = g.distance()
+                if abs(distance - self.gripper_squeeze_dist[i]) < 2:
+                    g.stop()
+                    if i < len(self.polygons):
+                        self.polygons[i].poly.filter = Polygon.move_filter
+
+        elif dt == 500:
+            # init unsqueeze phase
+            self.space.damping = 1
+            for p in self.polygons:
+                p.body.velocity_func = Polygon.zero_velocity
+
+            for g in self.grippers:
+                g.unsqueeze()
+        elif dt > 500:
+            # unsqueeze phase
+            for g in self.grippers:
+                g.limit_unsqueeze()
+
+        for x in range(10):
+            self.space.step(1/50/10)

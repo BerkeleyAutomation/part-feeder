@@ -60,7 +60,7 @@ The push function is derived in the same fashion as the squeeze function is deri
 function. For more information on the push and radius function, see Goldberg (1993).
 
 The push function is used to compute the push-grasp function, another transfer function that is used
-to compute a different, more realistic plan.
+to compute a different that avoids unrealistic assumptions used in the squeeze function.
 ''')
 
 pg = dcc.Markdown('''

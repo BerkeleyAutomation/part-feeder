@@ -17,6 +17,11 @@ from . import anim
 
 displays = {}
 
+# global dropdown selector codes
+sq_anim = 'sq_anim'
+pg_anim = 'pg_anim'
+stop = 'stop'
+
 def init_feeder(server):
     """Create the plots using plotly and dash."""
     dash_app = dash.Dash(
@@ -26,12 +31,23 @@ def init_feeder(server):
 
     dash_app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
-        html.Div(id='page_content'),
+        html.Div(id='page_content'),       # this displays all the plots and explanations
         dcc.Interval(
             id='update_interval',
             interval=20,
+            disabled=True
             ),
-        dcc.Graph(
+        dcc.Dropdown(       # dropdown selector to determine which animation to display.
+            id='anim_selector',
+            options=[
+                {'label': 'Squeeze Plan', 'value': sq_anim},
+                {'label': 'Push Grasp Plan', 'value': pg_anim},
+                {'label': 'Stop Animation', 'value': stop}
+            ],
+            searchable=False,
+            placeholder='Select a plan'
+            ),
+        dcc.Graph(          # animation figure
             id='anim', 
             style={'height': '50vw', 'margin': 'auto'},
             config={'displayModeBar': False})
@@ -61,7 +77,7 @@ def init_callbacks(app):
         x = list(map(int, points['x']))
         y = list(map(int, points['y']))
 
-        points = np.hstack((np.array(x).reshape((-1, 1)), np.array(y).reshape((-1, 1)))) * np.array([1, -1])
+        points = np.hstack((np.array(x).reshape((-1, 1)), np.array(y).reshape((-1, 1))))
         points = engine.scale_and_center_polygon(points)
 
         return create_page(points, search)
@@ -69,16 +85,19 @@ def init_callbacks(app):
     @app.callback(
         Output('anim', 'figure'),
         Input('update_interval', 'n_intervals'),
-        State('url', 'search'))
-    def update_anim(n, search):
+        State('url', 'search'),
+        State('anim_selector', 'value')
+        )
+    def update_anim(n, search, value):
         if search and search[0] == '?':
             search = search[1:]
 
         ### TODO one display per session
         d = displays.get(search, None)
-        if d is not None:
-            d.step(n)
-            return d.draw()
+        if d and value and value != stop:
+            anim = d.get(value)
+            anim.step(n)
+            return anim.draw()
 
         else:
             fig = go.Figure(
@@ -88,6 +107,15 @@ def init_callbacks(app):
                     showlegend=False))
 
             return fig
+
+    @app.callback(
+        Output('update_interval', 'disabled'),
+        Input('anim_selector', 'value')
+        )
+    def start_sq_anim(value):
+        if value == stop:
+            return True
+        return False
 
 def create_page(points, hash_str):
     s_domain = (0, 2*np.pi)     # s_domain refers to all squeeze function related domains
@@ -122,13 +150,18 @@ def create_page(points, hash_str):
         dia_extended, piecewise_radius_range, domain=pg_domain)
     push_grasp_callable = engine.make_transfer_callable(push_grasp_func, domain=pg_domain)
 
-    # generate plan
-    intervals = engine.generate_intervals(squeeze_func)
-    plan = engine.generate_plan(intervals)
+    # generate squeeze plan
+    sq_intervals = engine.generate_intervals(squeeze_func, default_T=np.pi)
+    sq_plan = engine.generate_plan(sq_intervals)
+
+    # generate push-grasp plan
+    pg_intervals = engine.generate_intervals(push_grasp_func, default_T=2*np.pi)
+    pg_plan = engine.generate_plan(pg_intervals)
 
     # create display
-    d = anim.Display(points, plan, diameter_callable, squeeze_callable)
-    displays[hash_str] = d
+    d1 = anim.SqueezeDisplay(points, sq_plan, diameter_callable, squeeze_callable)
+    d2 = anim.PushGraspDisplay(points, pg_plan, radius_callable, diameter_callable, push_callable, push_grasp_callable)
+    displays[hash_str] = {sq_anim: d1, pg_anim: d2}
 
     # Create figures
     ch_ap_graph = create_graph_from_figure(
