@@ -169,6 +169,20 @@ class Display:
         
         self.init_grippers()    
         self.polygons = []
+
+        self.init_draw_points()
+
+    def init_draw_points(self):
+        """Initializes the draw points"""
+        self.draw_points = np.vstack((self.points, self.points[0]))
+        self.draw_points = self.draw_points.T
+
+        # thick line for alignment purposes
+        self.thick_line = self.draw_points[:, :2]
+        for i in range(1, len(self.draw_points)-1):
+            if math.dist(self.draw_points[:, i], self.draw_points[:, i+1]) > \
+                math.dist(self.thick_line[:, 0], self.thick_line[:, 1]):
+                self.thick_line = self.draw_points[:, i:i+2]
         
     def init_grippers(self):
         """Initializes the grippers according to their angles and adds them to the space."""
@@ -240,7 +254,8 @@ class Display:
                 fig.add_trace(line)
 
             elif type(shape) is pymunk.Poly:
-                rotated = np.dot(matrix, self.points.T) + pos
+                rotated = np.dot(matrix, self.draw_points) + pos
+                rotated_line = np.dot(matrix, self.thick_line) + pos
 
                 poly = go.Scatter(
                     x=rotated[0],
@@ -249,7 +264,17 @@ class Display:
                     fill='toself',
                     line=go.scatter.Line(
                         color='blue'))
+
+                line = go.Scatter(
+                    x=rotated_line[0],
+                    y=rotated_line[1],
+                    mode='lines',
+                    line=go.scatter.Line(
+                        color='red',
+                        width=4))
+
                 fig.add_trace(poly)
+                fig.add_trace(line)
 
         return fig
 

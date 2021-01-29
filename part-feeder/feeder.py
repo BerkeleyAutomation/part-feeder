@@ -113,7 +113,7 @@ def init_callbacks(app):
         Input('anim_selector', 'value')
         )
     def start_sq_anim(value):
-        if value == stop:
+        if not value or value == stop:
             return True
         return False
 
