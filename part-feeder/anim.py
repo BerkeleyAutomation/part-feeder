@@ -166,6 +166,7 @@ class Display:
         self.space.threads = 2
         self.space.gravity = 0, 0
         self.space.damping = 1
+        self.step_size = 1/50       # time between each frame
         
         self.init_grippers()    
         self.polygons = []
@@ -206,7 +207,22 @@ class Display:
         This method should be overridden by subclasses. Squeeze plans and Push-grasp plans have
         different animation timing and steps.
         """
-        raise NotImplementedError
+        for x in range(10):
+            self.space.step(self.step_size/10)
+        # raise NotImplementedError
+
+    def step_draw(self, loops=1):
+        """Steps the environment and returns a frame for each step for several seconds"""
+        figs = []
+        # steps = round(seconds/self.step_size)
+        steps = type(self).TOTAL_TIME
+
+        for i in range(steps):
+            self.step(i)
+            figs.append(self.draw())
+
+        return figs
+
 
     def draw(self):
         """
@@ -214,11 +230,23 @@ class Display:
         animations, so only supports segments and polygons.
         """
         
-        fig = go.Figure(
-            layout=go.Layout(
-                xaxis=go.layout.XAxis(range=self.xlim),
-                yaxis=go.layout.YAxis(scaleanchor='x', range=self.ylim),
-                showlegend=False))
+        traces = self.__get_traces()
+        fig = {
+            'data': traces,
+            'layout': {
+                'xaxis': {'range': self.xlim},
+                'yaxis': {
+                    'scaleanchor': 'x',
+                    'range': self.ylim
+                },
+                'showlegend': False
+            }
+        }
+
+        return fig
+
+    def __get_traces(self):
+        traces = []
 
         for shape in self.space.shapes:
             theta = shape.body.angle
@@ -243,40 +271,48 @@ class Display:
 
                 rotated = np.dot(matrix, points) + pos
 
-                line = go.Scatter(
-                    x=rotated[0],
-                    y=rotated[1],
-                    mode='lines',
-                    line=go.scatter.Line(
-                        color='black',
-                        width=2*shape.radius))
+                line = {
+                    'type': 'scatter',
+                    'x': rotated[0].tolist(),
+                    'y': rotated[1].tolist(),
+                    'line': {
+                        'color': 'black',
+                        'width': 2*shape.radius
+                    }
+                }
 
-                fig.add_trace(line)
+                traces.append(line)
 
             elif type(shape) is pymunk.Poly:
                 rotated = np.dot(matrix, self.draw_points) + pos
                 rotated_line = np.dot(matrix, self.thick_line) + pos
 
-                poly = go.Scatter(
-                    x=rotated[0],
-                    y=rotated[1],
-                    mode='lines',
-                    fill='toself',
-                    line=go.scatter.Line(
-                        color='blue'))
+                poly = {
+                    'type': 'scatter',
+                    'x': rotated[0].tolist(),
+                    'y': rotated[1].tolist(),
+                    'mode': 'lines',
+                    'fill': 'toself',
+                    'line': {
+                        'color': 'blue',
+                    }
+                }
 
-                line = go.Scatter(
-                    x=rotated_line[0],
-                    y=rotated_line[1],
-                    mode='lines',
-                    line=go.scatter.Line(
-                        color='red',
-                        width=4))
+                line = {
+                    'type': 'scatter',
+                    'x': rotated_line[0].tolist(),
+                    'y': rotated_line[1].tolist(),
+                    'mode': 'lines',
+                    'line': {
+                        'color': 'red',
+                        'width': 4
+                    }
+                }
 
-                fig.add_trace(poly)
-                fig.add_trace(line)
+                traces.append(poly)
+                traces.append(line)
 
-        return fig
+        return traces
 
 
 class SqueezeDisplay(Display):
@@ -364,8 +400,7 @@ class SqueezeDisplay(Display):
             for g in self.grippers:
                 g.limit_unsqueeze()
 
-        for x in range(10):
-            self.space.step(1/50/10)
+        super().step(dt)
 
 class PushGraspDisplay(Display):
     """
@@ -476,5 +511,4 @@ class PushGraspDisplay(Display):
             for g in self.grippers:
                 g.limit_unsqueeze()
 
-        for x in range(10):
-            self.space.step(1/50/10)
+        super().step(dt)

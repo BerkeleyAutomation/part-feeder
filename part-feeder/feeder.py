@@ -33,9 +33,18 @@ def init_feeder(server):
         dcc.Location(id='url', refresh=False),
         html.Div(id='page_content'),       # this displays all the plots and explanations
         dcc.Interval(
-            id='update_interval',
-            interval=20,
+            id='data_update_interval',
+            interval=10000, # 20,
             disabled=True
+            ),
+        dcc.Interval(
+            id='anim_update_interval',
+            interval=20,
+            ),
+        dcc.Store(
+            id='anim_data',
+            data=[],
+            storage_type='memory'
             ),
         dcc.Dropdown(       # dropdown selector to determine which animation to display.
             id='anim_selector',
@@ -82,34 +91,43 @@ def init_callbacks(app):
 
         return create_page(points, search)
 
-    @app.callback(
+    app.clientside_callback(
+        """
+        function(n, data) {
+            if (data.length > 0) {
+                return data.shift();
+            }
+        }
+        """,
         Output('anim', 'figure'),
-        Input('update_interval', 'n_intervals'),
-        State('url', 'search'),
-        State('anim_selector', 'value')
+        Input('anim_update_interval', 'n_intervals'),
+        State('anim_data', 'data')
         )
-    def update_anim(n, search, value):
+
+    @app.callback(
+        Output('anim_data', 'data'),
+        Input('data_update_interval', 'n_intervals'),
+        State('url', 'search'),
+        State('anim_selector', 'value'),
+        State('anim_data', 'data')
+        )
+    def update_anim_data(n, search, value, data):
         if search and search[0] == '?':
             search = search[1:]
+
+        if not data:
+            data = []
 
         ### TODO one display per session
         d = displays.get(search, None)
         if d and value and value != stop:
             anim = d.get(value)
-            anim.step(n)
-            return anim.draw()
-
-        else:
-            fig = go.Figure(
-                layout=go.Layout(
-                    xaxis=go.layout.XAxis(range=(-50, 50)),
-                    yaxis=go.layout.YAxis(scaleanchor='x', range=(-50, 50)),
-                    showlegend=False))
-
-            return fig
+            # anim.step(n)
+            # return anim.draw()
+            return data + anim.step_draw()
 
     @app.callback(
-        Output('update_interval', 'disabled'),
+        Output('data_update_interval', 'disabled'),
         Input('anim_selector', 'value')
         )
     def start_sq_anim(value):
