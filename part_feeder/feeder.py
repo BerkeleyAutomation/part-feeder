@@ -34,12 +34,12 @@ def init_feeder(server):
         html.Div(id='page_content'),       # this displays all the plots and explanations
         dcc.Interval(
             id='data_update_interval',
-            interval=10000, # 20,
+            interval=5000, # 20,
             disabled=True
             ),
         dcc.Interval(
             id='anim_update_interval',
-            interval=10,
+            interval=50,
             disabled=True
             ),
         dcc.Store(
@@ -59,7 +59,7 @@ def init_feeder(server):
             ),
         dcc.Graph(          # animation figure
             id='anim', 
-            style={'height': '50vw', 'margin': 'auto'},
+            style={'height': '50vh', 'margin': 'auto'},
             config={'displayModeBar': False})
         ])
 
@@ -95,8 +95,10 @@ def init_callbacks(app):
     app.clientside_callback(
         """
         function(n, data) {
-            if (data.length > 0) {
+            if (data.length > 1) {
                 return data.shift();
+            } else if (data.length == 1) {
+                return data[0];
             }
         }
         """,
@@ -125,7 +127,7 @@ def init_callbacks(app):
             anim = d.get(value)
             # anim.step(n)
             # return anim.draw()
-            return data + anim.step_draw()
+            return data + anim.step_draw(loops=2)
 
     @app.callback(
         Output('data_update_interval', 'disabled'),
@@ -321,6 +323,7 @@ def create_graph_from_figure(figure, id):
         id=id, 
         figure=figure,
         style={'width': '50vh', 'height': '50vh', 'margin': 'auto'},
-        config={'displayModeBar': False})
+        config={'displayModeBar': False, 'staticPlot': True}
+    )
 
     return graph
