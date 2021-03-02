@@ -313,7 +313,7 @@ def generate_bounded_callable(bounded_piecewise_func, period):
     return func
 
 
-def find_bounded_extrema(bounded_piecewise_func, period, domain):
+def find_bounded_extrema(bounded_piecewise_func, period, domain, buffer=1):
     """Finds all the extrema of bounded_piecewise_func within the given domain.
 
     bounded_piecewise_func must be of the format described in generate_bounded_piecewise_func.
@@ -361,9 +361,9 @@ def find_bounded_extrema(bounded_piecewise_func, period, domain):
             count += 1
 
         # limit the extrema, remove all outside of domain except for one (for convenience in plotting squeeze function)
-        while extrema[1] < domain[0] and not np.isclose(extrema[1], domain[0]):
+        while extrema[buffer] < domain[0] and not np.isclose(extrema[buffer], domain[0]):
             extrema = extrema[1:]
-        while extrema[-2] > domain[1] and not np.isclose(extrema[-2], domain[1]):
+        while extrema[-buffer-1] > domain[1] and not np.isclose(extrema[-buffer-1], domain[1]):
             extrema = extrema[:-1]
 
         return extrema
@@ -421,7 +421,7 @@ def generate_bounded_push_grasp_function(push_func, squeeze_func):
     together, i.e. push_grasp(theta) = squeeze(push(theta)).
     """
 
-    squeeze_callable = generate_transfer_extrema_callable(squeeze_func, period=2*np.pi)
+    squeeze_callable = generate_transfer_extrema_callable(squeeze_func, period=np.pi)
 
     push_grasp_func = []
     for a, b, t in push_func:

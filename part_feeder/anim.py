@@ -334,14 +334,14 @@ class Display:
                 traces.append(line)
 
                 # debug line
-                debug_line = np.dot(matrix, np.array([[-50, 50], [0, 0]])) + pos
-                debug_line_fig = {
-                    'type': 'scatter',
-                    'x': debug_line[0].tolist(),
-                    'y': debug_line[1].tolist(),
-                    'mode': 'lines'
-                }
-                traces.append(debug_line_fig)
+                # debug_line = np.dot(matrix, np.array([[-50, 50], [0, 0]])) + pos
+                # debug_line_fig = {
+                #     'type': 'scatter',
+                #     'x': debug_line[0].tolist(),
+                #     'y': debug_line[1].tolist(),
+                #     'mode': 'lines'
+                # }
+                # traces.append(debug_line_fig)
 
         return traces
 
@@ -579,7 +579,7 @@ class PushGraspDisplay(Display):
                         # stop if polygon is at the push angle or as a fallback at the push distance
                         distance = g.bot.position.get_distance(self.polygons[row_idx][i].body.position)
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_push_angle[row_idx][i]) \
-                                < 0.05 or abs(distance - self.gripper_push_dist[row_idx][i]) < 3:
+                                < 0.05: # or abs(distance - self.gripper_push_dist[row_idx][i]) < 3:
                             stop = True
                             self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
 

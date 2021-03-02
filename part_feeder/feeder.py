@@ -22,6 +22,7 @@ sq_anim = 'sq_anim'
 pg_anim = 'pg_anim'
 stop = 'stop'
 
+
 def init_feeder(server):
     """Create the plots using plotly and dash."""
     dash_app = dash.Dash(
@@ -47,6 +48,10 @@ def init_feeder(server):
             data=[],
             storage_type='memory'
             ),
+        dcc.Store(
+            id='prev_anim',
+            storage_type='memory'
+        ),
         dcc.Dropdown(       # dropdown selector to determine which animation to display.
             id='anim_selector',
             options=[
@@ -61,7 +66,8 @@ def init_feeder(server):
             id='anim', 
             style={'height': '50vh', 'margin': 'auto'},
             config={'displayModeBar': False})
-        ])
+        ]
+    )
 
     init_callbacks(dash_app)
 
@@ -109,36 +115,42 @@ def init_callbacks(app):
 
     @app.callback(
         Output('anim_data', 'data'),
-        Input('data_update_interval', 'n_intervals'),
-        State('url', 'search'),
-        State('anim_selector', 'value'),
-        State('anim_data', 'data')
-        )
-    def update_anim_data(n, search, value, data):
-        if search and search[0] == '?':
-            search = search[1:]
-
-        if not data:
-            data = []
-
-        ### TODO one display per session
-        d = displays.get(search, None)
-        if d and value and value != stop:
-            anim = d.get(value)
-            # anim.step(n)
-            # return anim.draw()
-            return data + anim.step_draw(loops=5)
-
-    @app.callback(
         Output('data_update_interval', 'disabled'),
         Output('anim_update_interval', 'disabled'),
-        Input('anim_selector', 'value')
+        Output('prev_anim', 'data'),
+        Input('data_update_interval', 'n_intervals'),
+        Input('anim_selector', 'value'),
+        State('url', 'search'),
+        State('anim_data', 'data'),
+        State('anim_update_interval', 'disabled'),       # used to tell whether the previous dropdown value was stop
+        State('prev_anim', 'data')
         )
-    def start_sq_anim(value):
-        if not value or value == stop:
-            return True, True
-        print('changed value')
-        return False, False
+    def update_anim_data(n, value, search, data, disabled, prev):
+        ctx = dash.callback_context
+
+        if ctx.triggered:
+            if search and search[0] == '?':
+                search = search[1:]
+
+            if not data:
+                data = []
+
+            ### TODO one display per session
+            d = displays.get(search, None)
+            trigger = ctx.triggered[0]['prop_id'].split('.')[0]
+            if trigger == 'anim_selector':
+                if value == stop:
+                    return data, True, True, prev
+
+                # purge all of the data since the selector changed to different anim
+                if prev == value:
+                    return data + d.get(value).step_draw(loops=5), False, False, prev
+                return d.get(value).step_draw(loops=5), False, False, value
+
+            # selector has not changed. continue calling for data.
+            elif value != stop:
+                return data + d.get(value).step_draw(loops=5), False, False, value
+        return [], True, True, ''
 
 
 def create_page(points, hash_str):
@@ -173,7 +185,7 @@ def create_page(points, hash_str):
 
     # Push-grasp function
     extended_squeeze = engine.generate_transfer_from_extrema(
-        *reversed(engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain))
+        *reversed(engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain, buffer=2))
     )
     push_grasp_func = engine.generate_bounded_push_grasp_function(push_func, extended_squeeze)
     push_grasp_callable = engine.generate_transfer_extrema_callable(push_grasp_func, period=2*np.pi)
@@ -235,7 +247,7 @@ def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
         x=draw_ch[:, 0],
         y=draw_ch[:, 1],
         mode='lines',
-        line=go.scatter.Line(color='black')
+        line=go.scatter.Line(color='black', width=4)
     ))
     # Plot antipodal pairs
     for p1, p2 in antipodal_pairs:
