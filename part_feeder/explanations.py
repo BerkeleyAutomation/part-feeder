@@ -7,8 +7,8 @@ This module contains all the explanations present on the 'generate plan' webpage
 ch_ap = dcc.Markdown('''
 ## The Polygon
 
-The polygon you entered is shaded in blue. The red outline represents the polygon's convex hull,
-which the algorithm uses to compute a plan. The black lines that cross the polygon are antipodal
+The polygon you entered is shaded in dark blue. The black outline represents the polygon's convex hull,
+which the algorithm uses to compute a plan. The gold lines that cross the polygon are antipodal
 pairs. Antipodal pairs are pairs of points that admit parallel supporting lines, which are used
 to compute the diameter function. For more on antipodal pairs, see Preparata and Shamos (1985).
 
@@ -21,7 +21,7 @@ dia = dcc.Markdown('''
 
 The diameter function represents the minimum distance between two parallel lines as they are rotated
 around the polygon. This is computed using an adapted version of the antipodal pairs algorithm. The
-diameter function is a piecewise function consisting of a series of sinosoids whose amplitude and 
+diameter function is a piecewise function consisting of a series of sinusoids whose amplitude and 
 phase shift vary with respect to the polygon. For more info on computing the diameter function, see
 Goldberg (1993). 
 
@@ -77,5 +77,5 @@ anim = dcc.Markdown('''
 Now let's take a look at the algorithm in action! The algorithm, using information computed from the
 series of plots above, generates a series of squeezing actions that orient the part *up to symmetry*.
 For most arbitrary polygons with no rotational symmetry, this usually means that the part will be
-oriented at some angle theta or theta+pi/2. As you can see in the animation below, that is the case!
+oriented at some angle theta or theta+pi/2.
 ''')

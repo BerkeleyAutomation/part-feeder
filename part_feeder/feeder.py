@@ -34,7 +34,7 @@ def init_feeder(server):
         html.Div(id='page_content'),       # this displays all the plots and explanations
         dcc.Interval(
             id='data_update_interval',
-            interval=5000, # 20,
+            interval=10_000,
             disabled=True
             ),
         dcc.Interval(
@@ -127,7 +127,7 @@ def init_callbacks(app):
             anim = d.get(value)
             # anim.step(n)
             # return anim.draw()
-            return data + anim.step_draw(loops=2)
+            return data + anim.step_draw(loops=5)
 
     @app.callback(
         Output('data_update_interval', 'disabled'),
@@ -139,6 +139,7 @@ def init_callbacks(app):
             return True, True
         return False, False
 
+
 def create_page(points, hash_str):
     s_domain = (0, 2*np.pi)     # s_domain refers to all squeeze function related domains
     pg_domain = (0, 4*np.pi)    # pg_domain refers to all push-grasp function related domains
@@ -148,33 +149,33 @@ def create_page(points, hash_str):
 
     # Diameter function
     piecewise_diameter = engine.make_diameter_function(ch)
-    # import pprint
-    # pprint.pprint(piecewise_diameter)
 
     bounded_piecewise_diameter = engine.generate_bounded_piecewise_func(piecewise_diameter, period=np.pi)
-    # print('\n')
-    # pprint.pprint(bounded_piecewise_diameter)
     diameter_callable = engine.generate_bounded_callable(bounded_piecewise_diameter, period=np.pi)
     diameter_maxima, diameter_minima = engine.find_bounded_extrema(bounded_piecewise_diameter,
                                                                    period=np.pi, domain=s_domain)
+
+    # Squeeze function
     squeeze_func = engine.generate_transfer_from_extrema(diameter_minima, diameter_maxima)
     squeeze_callable = engine.generate_transfer_extrema_callable(squeeze_func, period=np.pi)
 
     # Radius function
     piecewise_radius = engine.make_radius_function(ch)
-    piecewise_radius_range = engine.generate_range(piecewise_radius, period=2*np.pi, domain=pg_domain)
-    radius_callable = engine.generate_callable(piecewise_radius_range)
-    radius_maxima, radius_minima = engine.find_extrema(piecewise_radius_range, domain=pg_domain)
+    bounded_piecewise_radius = engine.generate_bounded_piecewise_func(piecewise_radius, period=2*np.pi)
+    radius_callable = engine.generate_bounded_callable(bounded_piecewise_radius, period=2*np.pi)
+    radius_maxima, radius_minima = engine.find_bounded_extrema(bounded_piecewise_radius,
+                                                               period=2*np.pi, domain=pg_domain)
 
     # Push function
-    push_func = engine.make_transfer_function(piecewise_radius_range, domain=pg_domain)
-    push_callable = engine.make_transfer_callable(push_func, domain=pg_domain)
+    push_func = engine.generate_transfer_from_extrema(radius_minima, radius_maxima)
+    push_callable = engine.generate_transfer_extrema_callable(push_func, period=2*np.pi)
 
     # Push-grasp function
-    dia_extended = engine.generate_range(piecewise_diameter, period=np.pi, domain=pg_domain)
-    push_grasp_func = engine.make_push_grasp_function(
-        dia_extended, piecewise_radius_range, domain=pg_domain)
-    push_grasp_callable = engine.make_transfer_callable(push_grasp_func, domain=pg_domain)
+    extended_squeeze = engine.generate_transfer_from_extrema(
+        *engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain)
+    )
+    push_grasp_func = engine.generate_bounded_push_grasp_function(push_func, extended_squeeze)
+    push_grasp_callable = engine.generate_transfer_extrema_callable(push_grasp_func, period=2*np.pi)
 
     # generate squeeze plan
     sq_intervals = engine.generate_intervals(squeeze_func, default_T=np.pi)
@@ -213,6 +214,7 @@ def create_page(points, hash_str):
             explanations.pg, pg_graph,
             explanations.anim]
 
+
 def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
     draw_points = np.vstack((points, points[0]))
     draw_ch = np.vstack((convex_hull, convex_hull[0]))
@@ -245,6 +247,7 @@ def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
             line=go.scatter.Line(color='#DB9501')
         ))
     return fig
+
 
 def create_function_figure(func_callable, minima, maxima, domain=(0, 2*np.pi)):
     steps = round((domain[1]-domain[0])/(np.pi/2)) + 1

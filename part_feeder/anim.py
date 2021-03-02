@@ -330,6 +330,7 @@ class Display:
                 traces.append(poly)
                 traces.append(line)
 
+                # debug line
                 debug_line = np.dot(matrix, np.array([[-50, 50], [0, 0]])) + pos
                 debug_line_fig = {
                     'type': 'scatter',
@@ -363,7 +364,7 @@ class SqueezeDisplay(Display):
         self.squeeze_callable = squeeze_callable
 
     def step(self, dt):
-        dt = dt % 500
+        dt = dt % SqueezeDisplay.TOTAL_TIME
         if dt == 0:
             # init move phase
             # create a new box; start moving all boxes to next one
@@ -428,10 +429,8 @@ class SqueezeDisplay(Display):
                 for i, g in enumerate(row):
                     distance = g.distance()
 
-                    ###### TODO
                     if i < len(self.polygons[0]) and abs(distance - self.polygon_rotate_dist[row_idx][i]) < 10:
                         self.polygons[row_idx][i].body.moment = 1e6
-                    ######
                     stop = False
                     if i < len(self.polygons[0]):
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_rotate_angle[row_idx][i]) \
@@ -479,8 +478,11 @@ class PushGraspDisplay(Display):
     def __init__(self, points, angles, radius_callable, diameter_callable, push_callable, push_grasp_callable):
         super().__init__(points, angles)
 
-        self.gripper_push_dist = []
-        self.gripper_squeeze_dist = []
+        self.gripper_push_dist = [[] for _ in self.rows]
+        self.gripper_squeeze_dist = [[] for _ in self.rows]
+
+        self.stop_push_angle = [[] for _ in self.rows]
+        self.stop_squeeze_angle = [[] for _ in self.rows]
 
         self.polygon_pins = []  # PivotJoint constraint to simulate part rotating after being
         # pushed by one plate
@@ -491,7 +493,7 @@ class PushGraspDisplay(Display):
         self.push_grasp_callable = push_grasp_callable
 
     def step(self, dt):
-        dt = dt % 650
+        dt = dt % PushGraspDisplay.TOTAL_TIME
         if dt == 0:
             # init move phase
             # create a new box; start moving all boxes to next one

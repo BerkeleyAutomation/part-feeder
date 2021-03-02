@@ -374,6 +374,13 @@ def find_bounded_extrema(bounded_piecewise_func, period, domain):
 
 
 def generate_transfer_from_extrema(minima, maxima):
+    """Generates a transfer function from extrema that are generated from a bounded piecewise function.
+    Makes a transfer function (a squeeze or push function). Return format is _not_ the same
+    as a diameter or radius function.
+
+    Return format is the a list of (a, b, t) tuples, where [a, b) describe the domain in which
+    the output is t.
+    """
     transfer_func = []
     for a, b in zip(maxima[:-1], maxima[1:]):
         t = minima[np.logical_and(a < minima, minima < b)]
@@ -386,6 +393,13 @@ def generate_transfer_from_extrema(minima, maxima):
 
 
 def generate_transfer_extrema_callable(transfer_func, period):
+    """
+    Makes a callable transfer function (a squeeze or a push function) for convenience and plotting purposes.
+    In practice, it is easier to work directly with the extrema of each function. transfer_func must be the
+    output of generate_transfer_from_extrema or generate_bounded_push_grasp_function
+
+    Returns a callable transfer function that is valid over the passed domain.
+    """
     _min, _max = transfer_func[0][0], transfer_func[-1][1]
 
     def func(theta):
@@ -399,6 +413,28 @@ def generate_transfer_extrema_callable(transfer_func, period):
                 return t
 
     return func
+
+
+def generate_bounded_push_grasp_function(push_func, squeeze_func):
+    """
+    Returns a push-grasp function as defined in Goldberg (1993) by composing the push and squeeze functions
+    together, i.e. push_grasp(theta) = squeeze(push(theta)).
+    """
+
+    squeeze_callable = generate_transfer_extrema_callable(squeeze_func, period=2*np.pi)
+
+    push_grasp_func = []
+    for a, b, t in push_func:
+        next_t = squeeze_callable(t)
+        if len(push_grasp_func) > 0 and np.isclose(next_t, push_grasp_func[-1][-1]):
+            prev = push_grasp_func.pop()
+            next_piece = (prev[0], b, next_t)
+        else:
+            next_piece = (a, b, next_t)
+
+        push_grasp_func.append(next_piece)
+
+    return push_grasp_func
 
 
 def generate_callable(piecewise_func):
@@ -494,77 +530,6 @@ def make_radius_function(points):
     pieces.sort(key=lambda p: p[0])
 
     return pieces
-
-
-def make_transfer_function(piecewise_func, domain=(0, 2 * np.pi)):
-    """
-    Makes a transfer function (a squeeze or push function). Return format is _not_ the same
-    as a diameter or radius function. If piecewise_func is a radius function, then the output is
-    a push function. If piecewise_func is a diameter function, then the output is the 
-    squeeze function.
-    
-    Return format is the a list of (a, b, t) tuples, where [a, b) describe the domain in which
-    the output is t.
-    """
-    maxima, minima = find_extrema(piecewise_func, domain=domain)
-    minima_ranges = maxima[:]
-    if not np.isclose(minima_ranges[0], domain[0]):
-        minima_ranges.insert(0, domain[0])
-    if not np.isclose(minima_ranges[-1], domain[1]):
-        minima_ranges.append(domain[1])
-
-    piecewise_transfer = []
-
-    for i in range(len(minima_ranges) - 1):
-        a, b, t = minima_ranges[i], minima_ranges[i + 1], minima[i]
-        piecewise_transfer.append((a, b, t))
-
-    return piecewise_transfer
-
-
-def make_transfer_callable(piecewise_transfer_func, domain=(0, 2 * np.pi)):
-    """
-    Makes a callable transfer function (a squeeze or a push function) for convenience and plotting purposes. 
-    In practice, it is easier to work directly with the extrema of each function. piecewise_transfer_func
-    must be the output from either make_transfer_function or make_push_grasp_function.
-    
-    Returns a callable transfer function that is valid over the passed domain.
-    """
-
-    def transfer_func(theta):
-        for i in range(len(piecewise_transfer_func) - 1):
-            if piecewise_transfer_func[i][0] <= theta < piecewise_transfer_func[i][1] or \
-                    np.isclose(piecewise_transfer_func[i][0], theta):
-                return piecewise_transfer_func[i][2]
-
-        return domain[1]
-
-    return transfer_func
-
-
-def make_push_grasp_function(piecewise_diameter, piecewise_radius, domain=(0, 2 * np.pi)):
-    """
-    Returns a push-grasp function as defined in Goldberg (1993) by composing the push and squeeze functions
-    together, i.e. push_grasp(theta) = squeeze(push(theta)).
-    """
-    push_func = make_transfer_function(piecewise_radius, domain=domain)
-    squeeze_func = make_transfer_function(piecewise_diameter, domain=domain)
-
-    push_callable = make_transfer_callable(push_func, domain=domain)
-    squeeze_callable = make_transfer_callable(squeeze_func, domain=domain)
-
-    push_grasp_func = []
-    for a, b, t in push_func:
-        next_t = squeeze_callable(t)
-        if len(push_grasp_func) > 0 and np.isclose(next_t, push_grasp_func[-1][-1]):
-            prev = push_grasp_func.pop()
-            next_piece = (prev[0], b, next_t)
-        else:
-            next_piece = (a, b, next_t)
-
-        push_grasp_func.append(next_piece)
-
-    return push_grasp_func
 
 
 class Interval:
@@ -682,7 +647,7 @@ def transfer_func_periodicity(transfer_func, max_r=8, default_T=2 * np.pi):
     """
     res_T = default_T
 
-    transfer_func_callable = make_transfer_callable(transfer_func, domain=(0, 2 * np.pi))
+    transfer_func_callable = generate_transfer_extrema_callable(transfer_func, period=2*np.pi)
 
     x = np.linspace(0, 2 * np.pi, 1000)
     y = np.array([transfer_func_callable(t) for t in x])
@@ -707,8 +672,8 @@ def generate_plan(intervals):
 
     for i in reversed(range(len(intervals) - 1)):
         eps = (abs(intervals[i]) - abs(intervals[i + 1].image)) / 2
-        alpha = intervals[i + 1].image.a - intervals[i].a - eps + plan[-1]
-        # alpha = plan[-1] - (intervals[i+1].image.a - intervals[i].a - eps)
+        # alpha = intervals[i + 1].image.a - intervals[i].a - eps + plan[-1]
+        alpha = plan[-1] - (intervals[i+1].image.a - intervals[i].a - eps)
         plan.append(alpha)
 
     return plan
