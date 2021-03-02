@@ -60,18 +60,27 @@ def init_feeder(server):
                 {'label': 'Stop Animation', 'value': stop}
             ],
             searchable=False,
-            placeholder='Select a plan'
+            style={'display': 'none'},
+            clearable=False,
+            value=stop
             ),
         dcc.Graph(          # animation figure
             id='anim', 
-            style={'height': '50vh', 'margin': 'auto'},
-            config={'displayModeBar': False})
+            style={'height': '50vh', 'margin': 'auto', 'display': 'none'},
+            config={'displayModeBar': False}
+            ),
+        html.Div(
+            id='loading',
+            children='Loading...',
+            style={'margin': 'auto', 'width': '100%', 'padding': '10px', 'text-align': 'center', 'font-size': 'large'}
+            )
         ]
     )
 
     init_callbacks(dash_app)
 
     return dash_app.server
+
 
 def init_callbacks(app):
 
@@ -122,10 +131,9 @@ def init_callbacks(app):
         Input('anim_selector', 'value'),
         State('url', 'search'),
         State('anim_data', 'data'),
-        State('anim_update_interval', 'disabled'),       # used to tell whether the previous dropdown value was stop
         State('prev_anim', 'data')
         )
-    def update_anim_data(n, value, search, data, disabled, prev):
+    def update_anim_data(n, value, search, data, prev):
         ctx = dash.callback_context
 
         if ctx.triggered:
@@ -151,6 +159,18 @@ def init_callbacks(app):
             elif value != stop:
                 return data + d.get(value).step_draw(loops=5), False, False, value
         return [], True, True, ''
+
+    @app.callback(
+        Output('anim_selector', 'style'),
+        Output('anim', 'style'),
+        Output('loading', 'style'),
+        Input('page_content', 'children')
+    )
+    def show_anim(content):
+        if content:
+            return {'display': 'block'}, {'display': 'block', 'height': '50vh', 'margin': 'auto'}, {'display': 'none'}
+
+        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
 
 
 def create_page(points, hash_str):

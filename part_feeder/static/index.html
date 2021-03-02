@@ -7,7 +7,7 @@
             background-color: white; 
         }
         #canvas{
-            border: 1px solid red;
+            border: 1px solid #ff0000;
             margin: auto;
             display: block;
         }
@@ -16,6 +16,15 @@
             width: 100%;
             padding: 10px;
             text-align: center;
+            font-size: large;
+        }
+        #bottom {
+            position: absolute;
+            bottom: 0;
+        }
+        button {
+            width: 25vw;
+            font-size: 20px;
         }
     </style>
 </head>
@@ -25,11 +34,15 @@
         <br>
         This website is an implementation of <a href="https://goldberg.berkeley.edu/">Prof. Ken Goldberg's</a>
         1993 PhD thesis, <a href="https://goldberg.berkeley.edu/pubs/algo93.pdf">Orienting Polygonal Parts Without Sensors</a>.
-        To begin, click to draw a polygon, then press "Generate Plan" to see the algorithm in action.
+        To begin, click to draw a polygon. To complete the polygon, click on the first point in the polygon, then press
+        "Generate Plan" to see the algorithm in action.
         <br>
         <canvas id="canvas" width=800px height=800px></canvas>
         <br>
         <button id="generatePlan">Generate Plan</button>
+    </div>
+    <div class="center" id="bottom">
+        Made by Vincent Lim. Version 1.0
     </div>
     <script type="text/javascript">
         var canvas=document.getElementById("canvas");
