@@ -123,7 +123,7 @@
 
             for (i=0; i<coordinates.length; i++) {
                 x.push(coordinates[i].x);
-                y.push(coordinates[i].y);
+                y.push(ch-coordinates[i].y);        // need to shift origin to bottom left corner
             }
             var xQuery = arrayToQuery(x, "x");
             var yQuery = arrayToQuery(y, "y");

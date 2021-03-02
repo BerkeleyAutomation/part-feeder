@@ -127,6 +127,8 @@ class Polygon:
             self.body.angle = random.uniform(0, 2*math.pi)
         else:
             self.body.angle = angle
+
+        print(self.poly.moment)
         
     def reset_pos_func(self):
         self.body.position_func = pymunk.Body.update_position
@@ -212,7 +214,7 @@ class Display:
         # raise NotImplementedError
 
     def step_draw(self, loops=1):
-        """Steps the environment and returns a frame for each step for several seconds"""
+        """Steps the environment and returns a frame for each step for one loop of the cycle. """
         figs = []
         # steps = round(seconds/self.step_size)
         steps = type(self).TOTAL_TIME
@@ -239,13 +241,18 @@ class Display:
                     'scaleanchor': 'x',
                     'range': self.ylim
                 },
-                'showlegend': False
+                'showlegend': False,
+                'title': str(np.around(np.array(self.stop_rotate_angle)*180/math.pi, 3)) +
+                         str(np.around([p.body.angle*180/math.pi for p in self.polygons], 3)) + '\n' +
+                         str(np.around(self.stop_rotate_angle, 3)) +
+                         str(np.around([p.body.angle for p in self.polygons], 3))
             }
         }
 
         return fig
 
     def __get_traces(self):
+        """Returns the traces for all the segments and polygons in the animation. """
         traces = []
 
         for shape in self.space.shapes:
@@ -293,24 +300,35 @@ class Display:
                     'y': rotated[1].tolist(),
                     'mode': 'lines',
                     'fill': 'toself',
+                    'fillcolor': '#2D4262',     # Berkeley Blue!
                     'line': {
-                        'color': 'blue',
+                        'color': 'black',
                     }
                 }
 
+                # thick alignment line
                 line = {
                     'type': 'scatter',
                     'x': rotated_line[0].tolist(),
                     'y': rotated_line[1].tolist(),
                     'mode': 'lines',
                     'line': {
-                        'color': 'red',
+                        'color': '#DB9501',     # Berkeley Gold!
                         'width': 4
                     }
                 }
 
                 traces.append(poly)
                 traces.append(line)
+
+                debug_line = np.dot(matrix, np.array([[-50, 50], [0, 0]])) + pos
+                debug_line_fig = {
+                    'type': 'scatter',
+                    'x': debug_line[0].tolist(),
+                    'y': debug_line[1].tolist(),
+                    'mode': 'lines'
+                }
+                traces.append(debug_line_fig)
 
         return traces
 
@@ -330,6 +348,7 @@ class SqueezeDisplay(Display):
 
         self.grippers_min_dist = []
         self.polygon_rotate_dist = []
+        self.stop_rotate_angle = []
 
         self.diameter_callable = diameter_callable
         self.squeeze_callable = squeeze_callable
@@ -344,6 +363,10 @@ class SqueezeDisplay(Display):
             for p in self.polygons:
                 p.reset_vel_func()
                 p.move()
+
+            # stop the grippers
+            for g in self.grippers:
+                g.stop()
         elif 0 + 50 < dt < 200:
             # move phase
             
@@ -360,15 +383,23 @@ class SqueezeDisplay(Display):
             
             self.grippers_min_dist = [50] * len(self.grippers)
             self.polygon_rotate_dist = [0] * len(self.polygons)
+
+            self.stop_rotate_angle = [0] * len(self.polygons)       # stop squeeze when polygon is at
+                                                                    # this angle
+
             for i, p in enumerate(self.polygons[:len(self.grippers)]):
                 p.squeeze()
                 p.body.moment = math.inf
                 rel_angle = (self.grippers[i].angle % (2*np.pi) - p.body.angle % (2*np.pi)) % (2*np.pi)
-                
+                # rel_angle = (p.body.angle % (2*np.pi) - self.grippers[i].angle % (2*np.pi)) % (2*np.pi)
                 self.polygon_rotate_dist[i] = self.diameter_callable(rel_angle)
+                print(i, rel_angle)
                 
                 ###### TODO
-                self.grippers_min_dist[i] = self.diameter_callable(self.squeeze_callable(rel_angle))
+                rel_output_angle = self.squeeze_callable(rel_angle)
+                output_angle = (rel_output_angle + self.grippers[i].angle % (2*np.pi)) % (2*np.pi)
+                self.stop_rotate_angle[i] = output_angle % (2*np.pi)
+                self.grippers_min_dist[i] = self.diameter_callable(rel_output_angle)
 
             for g in self.grippers:
                 g.squeeze()      
@@ -381,8 +412,15 @@ class SqueezeDisplay(Display):
                 if i < len(self.polygons) and abs(distance - self.polygon_rotate_dist[i]) < 10:
                     self.polygons[i].body.moment = 1e6
                 ######
-                
-                if abs(distance - self.grippers_min_dist[i]) < 1:
+                stop = False
+                if i < len(self.polygons):
+                    if abs(self.polygons[i].body.angle % (2*np.pi) - self.stop_rotate_angle[i]) < 0.05:
+                        stop = True
+                elif abs(distance - self.grippers_min_dist[i]) < 3:
+                    stop = True
+                elif distance < 3:
+                    stop = True
+                if stop:
                     g.stop()
                     if i < len(self.polygons):
                         self.polygons[i].poly.filter = Polygon.move_filter
