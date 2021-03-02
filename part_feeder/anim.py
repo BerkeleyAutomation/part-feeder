@@ -93,6 +93,9 @@ class Gripper:
         if (self.bot.position - self.bot_pos).length < eps:
             self.bot.velocity = 0, 0
 
+        if self.distance() > (self.top_pos - self.bot_pos).length:
+            self.stop()
+
     def reset_pos_func(self):
         self.bot.position_func = pymunk.Body.update_position
         self.top.position_func = pymunk.Body.update_position
@@ -408,7 +411,8 @@ class SqueezeDisplay(Display):
                     p.body.moment = math.inf
 
                     # angle of gripper relative to polygon
-                    rel_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - p.body.angle % (2 * np.pi)) % (2 * np.pi)
+                    rel_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - p.body.angle % (2 * np.pi)) % (
+                                2 * np.pi)
                     self.polygon_rotate_dist[row_idx][i] = self.diameter_callable(rel_angle)
 
                     # relative output angle of polygon
@@ -436,7 +440,7 @@ class SqueezeDisplay(Display):
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_rotate_angle[row_idx][i]) \
                                 < 0.05:
                             stop = True
-                    elif abs(distance - self.grippers_min_dist[row_idx][i]) < 3:
+                    if abs(distance - self.grippers_min_dist[row_idx][i]) < 3:
                         stop = True
                     elif distance < 3:
                         stop = True
@@ -484,8 +488,8 @@ class PushGraspDisplay(Display):
         self.stop_push_angle = [[] for _ in self.rows]
         self.stop_squeeze_angle = [[] for _ in self.rows]
 
-        self.polygon_pins = []  # PivotJoint constraint to simulate part rotating after being
-        # pushed by one plate
+        # PivotJoint constraint to simulate part rotating after being pushed by one plate
+        self.polygon_pins = [[] for _ in self.rows]
 
         self.radius_callable = radius_callable
         self.diameter_callable = diameter_callable
@@ -499,81 +503,131 @@ class PushGraspDisplay(Display):
             # create a new box; start moving all boxes to next one
             self.add_polygon()
 
-            for p in self.polygons:
-                p.reset_vel_func()
-                p.move()
+            for row in self.polygons:
+                for p in row:
+                    p.reset_vel_func()
+                    p.move()
         elif 0 + 50 < dt < 200:
             # move phase
 
             # stop polygons when they are in between a gripper
-            if self.polygons and (b := self.polygons[-1].body).position.x >= self.del_pos:
-                self.space.remove(b, *b.shapes)
-                self.polygons.pop()
-            for p in self.polygons:
-                if any(np.abs(p.body.position.x - self.gripper_pos) < 3):
-                    p.body.velocity = 0, 0
+            for r in self.polygons:
+                if r and (b := r[-1].body).position.x >= self.del_pos:
+                    self.space.remove(b, *b.shapes)
+                    r.pop()
+                for p in r:
+                    if any(np.abs(p.body.position.x - self.gripper_pos) < 3):
+                        p.body.velocity = 0, 0
         elif dt == 200:
             # init push phase
             self.space.damping = 0
 
-            self.gripper_push_dist = [50] * len(self.grippers)
-            self.gripper_squeeze_dist = [50] * len(self.grippers)
-            self.polygon_pins = []
-            for i, p in enumerate(self.polygons[:len(self.grippers)]):
-                p.squeeze()
-                rel_angle = (self.grippers[i].angle % (2 * np.pi) - p.body.angle % (2 * np.pi)) % (2 * np.pi)
+            # distance to stop pushing. fallback
+            self.gripper_push_dist = [[50] * len(self.grippers[0]) for _ in self.rows]
 
-                # minimum pushing distance
-                self.gripper_push_dist[i] = self.radius_callable(self.push_callable(rel_angle))
+            # distance to stop squeezing. fallback
+            self.gripper_squeeze_dist = [[50] * len(self.grippers[0]) for _ in self.rows]
 
-                # minimum squeezing distance
-                self.gripper_squeeze_dist[i] = self.diameter_callable(self.push_grasp_callable(rel_angle))
+            # angle to stop pushing
+            self.stop_push_angle = [[0] * len(self.polygons[0]) for _ in self.rows]
 
-                # lock polygon in place for push action
-                pin = pymunk.PivotJoint(p.body, self.space.static_body, p.body.position)
-                self.space.add(pin)
-                self.polygon_pins.append(pin)
+            # angle to stop squeezing
+            self.stop_squeeze_angle = [[0] * len(self.polygons[0]) for _ in self.rows]
 
-            for g in self.grippers:
-                g.push()
+            self.polygon_pins = [[] for _ in self.rows]
+            for row_idx, row in enumerate(self.polygons):
+                for i, p in enumerate(row[:len(self.grippers[0])]):
+                    p.squeeze()
+
+                    # angle of gripper relative to polygon
+                    rel_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - p.body.angle % (2 * np.pi)) % (
+                                2 * np.pi)
+
+                    rel_push_output_angle = self.push_callable(rel_angle)
+                    push_output_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - rel_push_output_angle) % (
+                                2 * np.pi)
+
+                    rel_pg_output_angle = self.push_grasp_callable(rel_angle)
+                    pg_output_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - rel_pg_output_angle) % (
+                                2 * np.pi)
+
+                    # minimum pushing distance
+                    self.gripper_push_dist[row_idx][i] = self.radius_callable(rel_push_output_angle)
+                    # minimum squeezing distance
+                    self.gripper_squeeze_dist[row_idx][i] = self.diameter_callable(rel_pg_output_angle)
+
+                    # angle to stop pushing
+                    self.stop_push_angle[row_idx][i] = push_output_angle
+
+                    # angle to stop squeezing (push grasp)
+                    self.stop_squeeze_angle[row_idx][i] = pg_output_angle
+
+                    # lock polygon in place for push action
+                    pin = pymunk.PivotJoint(p.body, self.space.static_body, p.body.position)
+                    self.space.add(pin)
+                    self.polygon_pins[row_idx].append(pin)
+
+            for row in self.grippers:
+                for g in row:
+                    g.push()
         elif 200 < dt < 350:
-            # push phase  
-            for i, g in enumerate(self.grippers):
-                if i < len(self.polygons):
-                    distance = g.bot.position.get_distance(self.polygons[i].body.position)
-                else:
-                    distance = g.bot.position.get_distance(g.bot_pos)
+            # push phase
+            for row_idx, row in enumerate(self.grippers):
+                for i, g in enumerate(row):
+                    stop = False
+                    if i < len(self.polygons[0]):
+                        # stop if polygon is at the push angle or as a fallback at the push distance
+                        distance = g.bot.position.get_distance(self.polygons[row_idx][i].body.position)
+                        if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_push_angle[row_idx][i]) \
+                                < 0.05 or abs(distance - self.gripper_push_dist[row_idx][i]) < 3:
+                            stop = True
+                            self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
 
-                if abs(distance - self.gripper_push_dist[i]) < 2:
-                    g.stop()
+                    elif abs(g.bot.position.get_distance(g.bot_pos) - self.gripper_push_dist[row_idx][i]) < 3:
+                        stop = True
+                    if stop:
+                        g.stop()
 
         elif dt == 350:
             # init squeeze phase
             # remove locking pivotjoint constraints and start sqeeze/grasping phase
-            for p in self.polygon_pins:
-                self.space.remove(p)
-            for g in self.grippers:
-                g.grasp()
+            for row_polygon_pins, row_grippers in zip(self.polygon_pins, self.grippers):
+                for p in row_polygon_pins:
+                    self.space.remove(p)
+                for g in row_grippers:
+                    g.grasp()
         elif 350 < dt < 500:
             # squeeze phase
-            for i, g in enumerate(self.grippers):
-                distance = g.distance()
-                if abs(distance - self.gripper_squeeze_dist[i]) < 2:
-                    g.stop()
-                    if i < len(self.polygons):
-                        self.polygons[i].poly.filter = Polygon.move_filter
+            for row_idx, row in enumerate(self.grippers):
+                for i, g in enumerate(row):
+                    distance = g.distance()
+                    stop = False
+                    if i < len(self.polygons[0]):
+                        if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_squeeze_angle[row_idx][i]) \
+                                < 0.05:
+                            stop = True
+                    if abs(distance - self.gripper_squeeze_dist[row_idx][i]) < 3 or distance < 3:
+                        stop = True
+
+                    if stop:
+                        g.stop()
+                        if i < len(self.polygons[0]):
+                            self.polygons[row_idx][i].poly.filter = Polygon.move_filter
+                            self.polygons[row_idx][i].body.angle = self.stop_squeeze_angle[row_idx][i]
 
         elif dt == 500:
             # init unsqueeze phase
             self.space.damping = 1
-            for p in self.polygons:
-                p.body.velocity_func = Polygon.zero_velocity
+            for row_polygons, row_grippers in zip(self.polygons, self.grippers):
+                for p in row_polygons:
+                    p.body.velocity_func = Polygon.zero_velocity
 
-            for g in self.grippers:
-                g.unsqueeze()
+                for g in row_grippers:
+                    g.unsqueeze()
         elif dt > 500:
             # unsqueeze phase
-            for g in self.grippers:
-                g.limit_unsqueeze()
+            for row in self.grippers:
+                for g in row:
+                    g.limit_unsqueeze()
 
         super().step(dt)

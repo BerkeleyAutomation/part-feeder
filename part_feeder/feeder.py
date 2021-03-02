@@ -137,6 +137,7 @@ def init_callbacks(app):
     def start_sq_anim(value):
         if not value or value == stop:
             return True, True
+        print('changed value')
         return False, False
 
 
@@ -172,7 +173,7 @@ def create_page(points, hash_str):
 
     # Push-grasp function
     extended_squeeze = engine.generate_transfer_from_extrema(
-        *engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain)
+        *reversed(engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain))
     )
     push_grasp_func = engine.generate_bounded_push_grasp_function(push_func, extended_squeeze)
     push_grasp_callable = engine.generate_transfer_extrema_callable(push_grasp_func, period=2*np.pi)
