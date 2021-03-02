@@ -39,7 +39,8 @@ def init_feeder(server):
             ),
         dcc.Interval(
             id='anim_update_interval',
-            interval=20,
+            interval=10,
+            disabled=True
             ),
         dcc.Store(
             id='anim_data',
@@ -128,12 +129,13 @@ def init_callbacks(app):
 
     @app.callback(
         Output('data_update_interval', 'disabled'),
+        Output('anim_update_interval', 'disabled'),
         Input('anim_selector', 'value')
         )
     def start_sq_anim(value):
         if not value or value == stop:
-            return True
-        return False
+            return True, True
+        return False, False
 
 def create_page(points, hash_str):
     s_domain = (0, 2*np.pi)     # s_domain refers to all squeeze function related domains
@@ -144,13 +146,17 @@ def create_page(points, hash_str):
 
     # Diameter function
     piecewise_diameter = engine.make_diameter_function(ch)
-    piecewise_diameter_range = engine.generate_range(piecewise_diameter, period=np.pi, domain=s_domain)
-    diameter_callable = engine.generate_callable(piecewise_diameter_range)
-    diameter_maxima, diameter_minima = engine.find_extrema(piecewise_diameter_range, domain=s_domain)
+    # import pprint
+    # pprint.pprint(piecewise_diameter)
 
-    # Squeeze function
-    squeeze_func = engine.make_transfer_function(piecewise_diameter_range, domain=s_domain)
-    squeeze_callable = engine.make_transfer_callable(squeeze_func, domain=s_domain)
+    bounded_piecewise_diameter = engine.generate_bounded_piecewise_func(piecewise_diameter, period=np.pi)
+    # print('\n')
+    # pprint.pprint(bounded_piecewise_diameter)
+    diameter_callable = engine.generate_bounded_callable(bounded_piecewise_diameter, period=np.pi)
+    diameter_maxima, diameter_minima = engine.find_bounded_extrema(bounded_piecewise_diameter,
+                                                                   period=np.pi, domain=s_domain)
+    squeeze_func = engine.generate_transfer_from_extrema(diameter_minima, diameter_maxima)
+    squeeze_callable = engine.generate_transfer_extrema_callable(squeeze_func, period=np.pi)
 
     # Radius function
     piecewise_radius = engine.make_radius_function(ch)
@@ -186,7 +192,7 @@ def create_page(points, hash_str):
         create_antipodal_pairs_figure(points, ch, antipodal_pairs), 'ch_ap_fig')
     dia_graph = create_graph_from_figure(
         create_function_figure(diameter_callable, diameter_minima, diameter_maxima, s_domain), 'dia_fig')
-    sq_graph = sq_graph = create_graph_from_figure(
+    sq_graph = create_graph_from_figure(
         create_transfer_figure(squeeze_callable, s_domain), 'sq_fig')
 
     rad_graph = create_graph_from_figure(
@@ -216,13 +222,15 @@ def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
         x=draw_points[:, 0],
         y=draw_points[:, 1],
         mode='lines',
-        fill='toself'))
+        fill='toself',
+        fillcolor='#2D4262'
+        ))
     # Plot convex hull
     fig.add_trace(go.Scatter(
         x=draw_ch[:, 0],
         y=draw_ch[:, 1],
         mode='lines',
-        line=go.scatter.Line(color='red')
+        line=go.scatter.Line(color='black')
     ))
     # Plot antipodal pairs
     for p1, p2 in antipodal_pairs:
@@ -232,7 +240,7 @@ def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
             x=[x1, x2], 
             y=[y1, y2],
             mode='lines',
-            line=go.scatter.Line(color='black')
+            line=go.scatter.Line(color='#DB9501')
         ))
     return fig
 
@@ -243,8 +251,10 @@ def create_function_figure(func_callable, minima, maxima, domain=(0, 2*np.pi)):
             showlegend=False,
             xaxis=go.layout.XAxis(
                 tickmode='array',
-                tickvals=np.linspace(*domain, steps))
-            )
+                tickvals=np.linspace(*domain, steps),
+                range=domain,
+                fixedrange=True
+            ))
         )
 
     x = np.linspace(*domain, 1000)
@@ -294,7 +304,8 @@ def create_transfer_figure(transfer_callable, domain=(0, 2*np.pi)):
         x=x,
         y=y,
         mode='lines',
-        line=go.scatter.Line(color='black')))
+        line=go.scatter.Line(color='black')
+    ))
 
     return fig
 
@@ -309,7 +320,7 @@ def create_graph_from_figure(figure, id):
     graph = dcc.Graph(
         id=id, 
         figure=figure,
-        style={'width': '50vw', 'height': '50vw', 'margin': 'auto'},
+        style={'width': '50vh', 'height': '50vh', 'margin': 'auto'},
         config={'displayModeBar': False})
 
     return graph
