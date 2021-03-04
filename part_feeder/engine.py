@@ -303,7 +303,7 @@ def generate_bounded_callable(bounded_piecewise_func, period):
     def func(theta):
         while theta > _max or np.isclose(theta, _max):
             theta -= period
-        while theta < _min:
+        while theta < _min and not np.isclose(theta, _min):
             theta += period
         for p in bounded_piecewise_func:
             lower, upper, l, i = p
@@ -338,6 +338,9 @@ def find_bounded_extrema(bounded_piecewise_func, period, domain, buffer=1):
     minima = []
     minima_candidates = np.array([p[0] for p in bounded_piecewise_func])
     minima_ranges = np.hstack((maxima[-1]-period, maxima[:]))
+
+    if minima_ranges[0] < minima_candidates[0]:
+        minima_candidates = np.hstack((minima_candidates-period, minima_candidates))
 
     for i in range(len(minima_ranges)-1):
         valid_points = minima_candidates[np.logical_and(minima_ranges[i] < minima_candidates,

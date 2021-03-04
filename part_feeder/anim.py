@@ -228,10 +228,10 @@ class Display:
         figs = []
         # steps = round(seconds/self.step_size)
         steps = type(self).TOTAL_TIME
-        for i in range(loops):
+        for _ in range(loops):
             for i in range(steps):
                 self.step(i)
-                if i % 8 == 0:
+                if i % 16 == 0:
                     figs.append(self.draw())
 
         return figs

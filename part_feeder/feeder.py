@@ -45,7 +45,7 @@ def init_feeder(server):
             ),
         dcc.Interval(
             id='anim_update_interval',
-            interval=25,
+            interval=50,
             disabled=True
             ),
         dcc.Store(
@@ -53,6 +53,11 @@ def init_feeder(server):
             data=[],
             storage_type='memory'
             ),
+        dcc.Store(
+            id='anim_holding_data',     # hold data here, wait for clientside callback to update it.
+            data=[],
+            storage_type='memory'
+        ),
         dcc.Store(
             id='prev_anim',
             storage_type='memory'
@@ -119,31 +124,40 @@ def init_callbacks(app):
 
     app.clientside_callback(
         """
-        function(n, data) {
+        function(n, value, data, holding_data, prev) {
+            if (value !== "stop" && value !== prev) {
+                // clear out data
+                data.length = 0;
+            }
+            for (var i=0; i<holding_data.length; i++) {
+                data.push(holding_data.shift());
+            }
             if (data.length > 1) {
-                return data.shift();
+                return data.shift(); //[data[0], data.slice(1)];
             } else if (data.length == 1) {
-                return data[0];
+                return data[0]; //[data[0], data];
             }
         }
         """,
         Output('anim', 'figure'),
         Input('anim_update_interval', 'n_intervals'),
-        State('anim_data', 'data')
+        Input('anim_selector', 'value'),
+        State('anim_data', 'data'),
+        State('anim_holding_data', 'data'),
+        State('prev_anim', 'data')
         )
 
     @app.callback(
-        Output('anim_data', 'data'),
+        Output('anim_holding_data', 'data'),
         Output('data_update_interval', 'disabled'),
         Output('anim_update_interval', 'disabled'),
         Output('prev_anim', 'data'),
         Input('data_update_interval', 'n_intervals'),
         Input('anim_selector', 'value'),
         State('url', 'search'),
-        State('anim_data', 'data'),
         State('prev_anim', 'data')
         )
-    def update_anim_data(n, value, search, data, prev):
+    def update_anim_data(n, value, search, prev):
         loops = 5
         ctx = dash.callback_context
 
@@ -151,26 +165,15 @@ def init_callbacks(app):
             if search and search[0] == '?':
                 search = search[1:]
 
-            if not data:
-                data = []
-
             ### TODO one display per session
             d = displays.get(search, None)
             trigger = ctx.triggered[0]['prop_id'].split('.')[0]
-            if trigger == 'anim_selector':
-                if value == stop:
-                    return data, True, True, prev
-
-                # purge all of the data since the selector changed to different anim
-                if prev == value:
-                    data.extend(d.get(value).step_draw(loops=loops))
-                    return data, False, False, prev
-                return d.get(value).step_draw(loops=loops), False, False, value
+            if trigger == 'anim_selector' and value == stop:
+                return [], True, True, prev
 
             # selector has not changed. continue calling for data.
-            elif value != stop:
-                data.extend(d.get(value).step_draw(loops=loops))
-                return data, False, False, value
+            if d and value != stop:
+                return d.get(value).step_draw(loops=loops), False, False, value
         return [], True, True, ''
 
     @app.callback(
