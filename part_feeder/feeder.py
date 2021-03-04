@@ -14,6 +14,7 @@ from urllib.parse import parse_qs
 from . import engine
 from . import explanations
 from . import anim
+from . import utils
 
 displays = {}
 
@@ -22,12 +23,16 @@ sq_anim = 'sq_anim'
 pg_anim = 'pg_anim'
 stop = 'stop'
 
+error_message = 'Error! Polygon vertices not correctly specified. Please go back to the previous page and try again.'
 
 def init_feeder(server):
     """Create the plots using plotly and dash."""
     dash_app = dash.Dash(
         server=server,
-        routes_pathname_prefix='/feeder/'
+        routes_pathname_prefix='/feeder/',
+        update_title=None,
+        title='Part Feeder',
+        external_scripts=["https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"]
         )
 
     dash_app.layout = html.Div([
@@ -40,7 +45,7 @@ def init_feeder(server):
             ),
         dcc.Interval(
             id='anim_update_interval',
-            interval=50,
+            interval=25,
             disabled=True
             ),
         dcc.Store(
@@ -93,7 +98,12 @@ def init_callbacks(app):
         """
         if search and search[0] == '?':
             search = search[1:]
+        if not search:
+            return error_message
         points = parse_qs(search)
+
+        if 'x' not in points or 'y' not in points or len(points['x']) != len(points['y']):
+            return error_message
 
         assert 'x' in points
         assert 'y' in points
@@ -134,6 +144,7 @@ def init_callbacks(app):
         State('prev_anim', 'data')
         )
     def update_anim_data(n, value, search, data, prev):
+        loops = 5
         ctx = dash.callback_context
 
         if ctx.triggered:
@@ -152,12 +163,14 @@ def init_callbacks(app):
 
                 # purge all of the data since the selector changed to different anim
                 if prev == value:
-                    return data + d.get(value).step_draw(loops=5), False, False, prev
-                return d.get(value).step_draw(loops=5), False, False, value
+                    data.extend(d.get(value).step_draw(loops=loops))
+                    return data, False, False, prev
+                return d.get(value).step_draw(loops=loops), False, False, value
 
             # selector has not changed. continue calling for data.
             elif value != stop:
-                return data + d.get(value).step_draw(loops=5), False, False, value
+                data.extend(d.get(value).step_draw(loops=loops))
+                return data, False, False, value
         return [], True, True, ''
 
     @app.callback(
@@ -167,9 +180,10 @@ def init_callbacks(app):
         Input('page_content', 'children')
     )
     def show_anim(content):
-        if content:
+        if content and content != error_message:
             return {'display': 'block'}, {'display': 'block', 'height': '50vh', 'margin': 'auto'}, {'display': 'none'}
-
+        elif content == error_message:
+            return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
         return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
 
 
@@ -290,6 +304,7 @@ def create_function_figure(func_callable, minima, maxima, domain=(0, 2*np.pi)):
             xaxis=go.layout.XAxis(
                 tickmode='array',
                 tickvals=np.linspace(*domain, steps),
+                ticktext=utils.generate_latex_text(domain[0], steps),
                 range=domain,
                 fixedrange=True
             ))
@@ -302,7 +317,8 @@ def create_function_figure(func_callable, minima, maxima, domain=(0, 2*np.pi)):
         x=x,
         y=y,
         mode='lines',
-        line=go.scatter.Line(color='black')))
+        line=go.scatter.Line(color='black')
+    ))
 
     y_lower = max(0, min(y)-20)
 
@@ -311,16 +327,19 @@ def create_function_figure(func_callable, minima, maxima, domain=(0, 2*np.pi)):
             x=[e, e],
             y=[y_lower, func_callable(e)],
             mode='lines',
-            line=go.scatter.Line(color='blue')))
+            line=go.scatter.Line(color='blue')
+        ))
 
     for e in maxima:
         fig.add_trace(go.Scatter(
             x=[e, e],
             y=[y_lower, func_callable(e)],
             mode='lines',
-            line=go.scatter.Line(color='red')))
+            line=go.scatter.Line(color='red')
+        ))
 
     return fig
+
 
 def create_transfer_figure(transfer_callable, domain=(0, 2*np.pi)):
     x = np.linspace(*domain, 1000)
@@ -332,10 +351,14 @@ def create_transfer_figure(transfer_callable, domain=(0, 2*np.pi)):
     fig.update_layout(
         yaxis=go.layout.YAxis(
             tickmode='array',
-            tickvals=np.linspace(*domain, steps)),
+            tickvals=np.linspace(*domain, steps),
+            ticktext=utils.generate_latex_text(domain[0], steps)
+            ),
         xaxis=go.layout.XAxis(
             tickmode='array',
-            tickvals=np.linspace(*domain, steps))
+            tickvals=np.linspace(*domain, steps),
+            ticktext=utils.generate_latex_text(domain[0], steps)  # [r'$$\pi/2$$' for _ in range(steps)]
+            ),
         )
 
     fig.add_trace(go.Scatter(
@@ -358,7 +381,7 @@ def create_graph_from_figure(figure, id):
     graph = dcc.Graph(
         id=id, 
         figure=figure,
-        style={'width': '50vh', 'height': '50vh', 'margin': 'auto'},
+        style={'width': '50vw', 'height': '50vw', 'max-width': '800px', 'max-height': '800px', 'margin': 'auto'},
         config={'displayModeBar': False, 'staticPlot': True}
     )
 

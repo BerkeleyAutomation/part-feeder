@@ -86,7 +86,7 @@ class Gripper:
 
     def limit_unsqueeze(self):
         """When unsqueezing, ensures that both grippers stop at their original position"""
-        eps = 3
+        eps = 10
 
         if (self.top.position - self.top_pos).length < eps:
             self.top.velocity = 0, 0
@@ -246,10 +246,18 @@ class Display:
         fig = {
             'data': traces,
             'layout': {
-                'xaxis': {'range': self.xlim},
+                'xaxis': {
+                    'range': self.xlim,
+                    'showticklabels': False,
+                    'showgrid': False,
+                    'zeroline': False
+                },
                 'yaxis': {
                     'scaleanchor': 'x',
-                    'range': self.ylim
+                    'range': self.ylim,
+                    'showticklabels': False,
+                    'showgrid': False,
+                    'zeroline': False
                 },
                 'showlegend': False  # ,
                 # 'title': str(np.around([g.distance() for g in self.grippers], 3)) +
@@ -291,7 +299,7 @@ class Display:
                 rotated = np.dot(matrix, points) + pos
 
                 line = {
-                    'type': 'scatter',
+                    'type': 'scattergl',
                     'x': rotated[0].tolist(),
                     'y': rotated[1].tolist(),
                     'line': {
@@ -307,7 +315,7 @@ class Display:
                 rotated_line = np.dot(matrix, self.thick_line) + pos
 
                 poly = {
-                    'type': 'scatter',
+                    'type': 'scattergl',
                     'x': rotated[0].tolist(),
                     'y': rotated[1].tolist(),
                     'mode': 'lines',
@@ -320,7 +328,7 @@ class Display:
 
                 # thick alignment line
                 line = {
-                    'type': 'scatter',
+                    'type': 'scattergl',
                     'x': rotated_line[0].tolist(),
                     'y': rotated_line[1].tolist(),
                     'mode': 'lines',
@@ -336,7 +344,7 @@ class Display:
                 # debug line
                 # debug_line = np.dot(matrix, np.array([[-50, 50], [0, 0]])) + pos
                 # debug_line_fig = {
-                #     'type': 'scatter',
+                #     'type': 'scattergl',
                 #     'x': debug_line[0].tolist(),
                 #     'y': debug_line[1].tolist(),
                 #     'mode': 'lines'
@@ -499,6 +507,9 @@ class PushGraspDisplay(Display):
     def step(self, dt):
         dt = dt % PushGraspDisplay.TOTAL_TIME
         if dt == 0:
+            for row in self.grippers:
+                for g in row:
+                    g.stop()
             # init move phase
             # create a new box; start moving all boxes to next one
             self.add_polygon()
@@ -543,6 +554,9 @@ class PushGraspDisplay(Display):
                     rel_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - p.body.angle % (2 * np.pi)) % (
                                 2 * np.pi)
 
+                    rel_angle_2 = (p.body.angle % (2 * np.pi) - self.grippers[row_idx][i].angle % (2 * np.pi)) % (
+                            2 * np.pi)
+
                     rel_push_output_angle = self.push_callable(rel_angle)
                     push_output_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - rel_push_output_angle) % (
                                 2 * np.pi)
@@ -579,7 +593,7 @@ class PushGraspDisplay(Display):
                         # stop if polygon is at the push angle or as a fallback at the push distance
                         distance = g.bot.position.get_distance(self.polygons[row_idx][i].body.position)
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_push_angle[row_idx][i]) \
-                                < 0.05: # or abs(distance - self.gripper_push_dist[row_idx][i]) < 3:
+                                < 0.05 or abs(distance - self.gripper_push_dist[row_idx][i]) < 3:
                             stop = True
                             self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
 
