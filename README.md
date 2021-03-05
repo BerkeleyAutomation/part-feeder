@@ -13,9 +13,9 @@ for interactive web plotting, and [pymunk](http://www.pymunk.org/en/latest/) to 
 actions for the animation.
 
 ## Description of files
-The application is contained within the [part-feeder folder](part-feeder/). Inside that folder:
-* [engine.py](part-feeder/engine.py) contains the functions related to the algorithm itself
-* [feeder.py](part-feeder/feeder.py) uses the functions in engine.py to execute the algorithm and
+The application is contained within the [part-feeder folder](part_feeder/). Inside that folder:
+* [engine.py](part_feeder/engine.py) contains the functions related to the algorithm itself
+* [feeder.py](part_feeder/feeder.py) uses the functions in engine.py to execute the algorithm and
 generate the plots
-* [anim.py](part-feeder/anim.py) contains the simulation of the squeeze actions using pymunk
-* [explanations.py](part-feeder) contains the text seen on the webpage
+* [anim.py](part_feeder/anim.py) contains the simulation of the squeeze actions using pymunk
+* [explanations.py](part_feeder/explanations.py) contains the text seen on the webpage

@@ -41,12 +41,12 @@ def init_feeder(server):
         dcc.Interval(
             id='data_update_interval',
             interval=10_000,
-            disabled=True
+            disabled=False
             ),
         dcc.Interval(
             id='anim_update_interval',
             interval=50,
-            disabled=True
+            disabled=False
             ),
         dcc.Store(
             id='anim_data',
@@ -72,12 +72,12 @@ def init_feeder(server):
             searchable=False,
             style={'display': 'none'},
             clearable=False,
-            value=stop
+            value=pg_anim
             ),
         dcc.Graph(          # animation figure
             id='anim', 
             style={'height': '50vh', 'margin': 'auto', 'display': 'none'},
-            config={'displayModeBar': False}
+            config={'displayModeBar': False, 'staticPlot': True}
             ),
         html.Div(
             id='loading',
@@ -107,7 +107,7 @@ def init_callbacks(app):
             return error_message
         points = parse_qs(search)
 
-        if 'x' not in points or 'y' not in points or len(points['x']) != len(points['y']):
+        if 'x' not in points or 'y' not in points or len(points['x']) != len(points['y']) or len(points['x']) < 3:
             return error_message
 
         assert 'x' in points
@@ -155,7 +155,8 @@ def init_callbacks(app):
         Input('data_update_interval', 'n_intervals'),
         Input('anim_selector', 'value'),
         State('url', 'search'),
-        State('prev_anim', 'data')
+        State('prev_anim', 'data')# ,
+        # prevent_initial_call=True
         )
     def update_anim_data(n, value, search, prev):
         loops = 5
@@ -172,9 +173,13 @@ def init_callbacks(app):
                 return [], True, True, prev
 
             # selector has not changed. continue calling for data.
-            if d and value != stop:
+            elif d and value != stop:
                 return d.get(value).step_draw(loops=loops), False, False, value
-        return [], True, True, ''
+        # print('I got here! disabling update intervals. ')
+        if value == stop:
+            return [], True, True, prev
+        else:
+            return [], False, False, value
 
     @app.callback(
         Output('anim_selector', 'style'),
@@ -373,12 +378,14 @@ def create_transfer_figure(transfer_callable, domain=(0, 2*np.pi)):
 
     return fig
 
+
 def create_base_figure():
     fig = go.Figure(
         layout=go.Layout(
             yaxis=go.layout.YAxis(scaleanchor='x'),
             showlegend=False))
     return fig
+
 
 def create_graph_from_figure(figure, id):
     graph = dcc.Graph(

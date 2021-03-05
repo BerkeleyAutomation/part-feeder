@@ -237,6 +237,14 @@ def make_diameter_function(points):
             else:
                 break
 
+    # make sure all angle are consecutive
+    piecewise_diameter = np.array(piecewise_diameter)
+    for i in range(len(piecewise_diameter)-1):
+        while piecewise_diameter[i, 0] > piecewise_diameter[i+1, 0]:
+            piecewise_diameter[0:i+1, 0] = piecewise_diameter[0:i+1, 0]-np.pi
+
+    piecewise_diameter = [tuple(p) for p in piecewise_diameter]
+
     return piecewise_diameter
 
 
@@ -339,8 +347,9 @@ def find_bounded_extrema(bounded_piecewise_func, period, domain, buffer=1):
     minima_candidates = np.array([p[0] for p in bounded_piecewise_func])
     minima_ranges = np.hstack((maxima[-1]-period, maxima[:]))
 
+    count, candidates_base = 1, np.copy(minima_candidates)
     if minima_ranges[0] < minima_candidates[0]:
-        minima_candidates = np.hstack((minima_candidates-period, minima_candidates))
+        minima_candidates = np.hstack((candidates_base-count*period, minima_candidates))
 
     for i in range(len(minima_ranges)-1):
         valid_points = minima_candidates[np.logical_and(minima_ranges[i] < minima_candidates,

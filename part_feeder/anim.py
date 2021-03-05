@@ -166,9 +166,12 @@ class Display:
         self.angles = angles
         self.points = points
 
-        self.gripper_pos = np.array([i * 250 for i in range(1, len(angles) + 1)])
+        spacing = 300
+
+        self.gripper_pos = np.array([i * spacing for i in range(1, len(angles) + 1)])
         self.start_pos = 0
-        self.del_pos = (len(angles) + 1) * 250  ### Keep one display location?
+        self.del_pos = (len(angles) + 2) * spacing  ### Keep one display location?
+        self.display_pos = (len(angles) + 1) * spacing
 
         self.xlim = (self.start_pos, self.del_pos)
         self.ylim = (-300, 300)
@@ -192,9 +195,9 @@ class Display:
 
         # thick line for alignment purposes
         self.thick_line = self.draw_points[:, :2]
-        for i in range(1, len(self.draw_points) - 1):
-            if math.dist(self.draw_points[:, i], self.draw_points[:, i + 1]) > \
-                    math.dist(self.thick_line[:, 0], self.thick_line[:, 1]):
+        for i in range(1, len(self.draw_points[0]) - 1):
+            if math.dist(self.draw_points[:, i].flatten(), self.draw_points[:, i + 1].flatten()) > \
+                    math.dist(self.thick_line[:, 0].flatten(), self.thick_line[:, 1].flatten()):
                 self.thick_line = self.draw_points[:, i:i + 2]
 
     def init_grippers(self):
@@ -219,9 +222,9 @@ class Display:
         This method should be overridden by subclasses. Squeeze plans and Push-grasp plans have
         different animation timing and steps.
         """
-        for x in range(10):
-            self.space.step(self.step_size / 10)
-        # raise NotImplementedError
+        # for x in range(10):
+        #     self.space.step(self.step_size / 10)
+        self.space.step(self.step_size)
 
     def step_draw(self, loops=1):
         """Steps the environment and returns a frame for each step for one loop of the cycle. """
@@ -299,7 +302,7 @@ class Display:
                 rotated = np.dot(matrix, points) + pos
 
                 line = {
-                    'type': 'scattergl',
+                    'type': 'scatter',
                     'x': rotated[0].tolist(),
                     'y': rotated[1].tolist(),
                     'line': {
@@ -315,7 +318,7 @@ class Display:
                 rotated_line = np.dot(matrix, self.thick_line) + pos
 
                 poly = {
-                    'type': 'scattergl',
+                    'type': 'scatter',
                     'x': rotated[0].tolist(),
                     'y': rotated[1].tolist(),
                     'mode': 'lines',
@@ -328,7 +331,7 @@ class Display:
 
                 # thick alignment line
                 line = {
-                    'type': 'scattergl',
+                    'type': 'scatter',
                     'x': rotated_line[0].tolist(),
                     'y': rotated_line[1].tolist(),
                     'mode': 'lines',
@@ -375,6 +378,8 @@ class SqueezeDisplay(Display):
         self.squeeze_callable = squeeze_callable
 
     def step(self, dt):
+        super().step(dt)
+
         dt = dt % SqueezeDisplay.TOTAL_TIME
         if dt == 0:
             # init move phase
@@ -399,7 +404,8 @@ class SqueezeDisplay(Display):
                     self.space.remove(b, *b.shapes)
                     r.pop()
                 for p in r:
-                    if any(np.abs(p.body.position.x - self.gripper_pos) < 3):
+                    if any(np.abs(p.body.position.x - self.gripper_pos) < 3) or \
+                            abs(p.body.position.x - self.display_pos) < 3:
                         p.body.velocity = 0, 0
         elif dt == 200:
             # init squeeze phase
@@ -473,7 +479,6 @@ class SqueezeDisplay(Display):
                 for g in r:
                     g.limit_unsqueeze()
 
-        super().step(dt)
 
 
 class PushGraspDisplay(Display):
@@ -527,7 +532,8 @@ class PushGraspDisplay(Display):
                     self.space.remove(b, *b.shapes)
                     r.pop()
                 for p in r:
-                    if any(np.abs(p.body.position.x - self.gripper_pos) < 3):
+                    if any(np.abs(p.body.position.x - self.gripper_pos) < 3) or \
+                            abs(p.body.position.x - self.display_pos) < 3:
                         p.body.velocity = 0, 0
         elif dt == 200:
             # init push phase
@@ -595,7 +601,8 @@ class PushGraspDisplay(Display):
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_push_angle[row_idx][i]) \
                                 < 0.05 or abs(distance - self.gripper_push_dist[row_idx][i]) < 3:
                             stop = True
-                            self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
+                            # self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
+                            # self.polygons[row_idx][i].poly.filter = Polygon.move_filter
 
                     elif abs(g.bot.position.get_distance(g.bot_pos) - self.gripper_push_dist[row_idx][i]) < 3:
                         stop = True
@@ -604,6 +611,10 @@ class PushGraspDisplay(Display):
 
         elif dt == 350:
             # init squeeze phase
+            for row in self.polygons:
+                for p in row:
+                    p.squeeze()
+
             # remove locking pivotjoint constraints and start sqeeze/grasping phase
             for row_polygon_pins, row_grippers in zip(self.polygon_pins, self.grippers):
                 for p in row_polygon_pins:
