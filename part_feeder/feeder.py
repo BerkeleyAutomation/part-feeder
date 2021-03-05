@@ -122,7 +122,7 @@ def init_callbacks(app):
 
         return create_page(points, search)
 
-    app.clientside_callback(
+    app.clientside_callback( # This clientside callback is a little bit of a hack but it works.
         """
         function(n, value, data, holding_data, prev) {
             if (value !== "stop" && value !== prev) {
@@ -155,8 +155,7 @@ def init_callbacks(app):
         Input('data_update_interval', 'n_intervals'),
         Input('anim_selector', 'value'),
         State('url', 'search'),
-        State('prev_anim', 'data')# ,
-        # prevent_initial_call=True
+        State('prev_anim', 'data')
         )
     def update_anim_data(n, value, search, prev):
         loops = 5

@@ -8,6 +8,7 @@ import pymunk
 from pymunk.vec2d import Vec2d
 
 import math, random
+from threading import Lock
 
 import plotly.graph_objs as go
 import plotly
@@ -188,6 +189,8 @@ class Display:
 
         self.init_draw_points()
 
+        self.lock = Lock()
+
     def init_draw_points(self):
         """Initializes the draw points"""
         self.draw_points = np.vstack((self.points, self.points[0]))
@@ -228,16 +231,17 @@ class Display:
 
     def step_draw(self, loops=1):
         """Steps the environment and returns a frame for each step for one loop of the cycle. """
-        figs = []
-        # steps = round(seconds/self.step_size)
-        steps = type(self).TOTAL_TIME
-        for _ in range(loops):
-            for i in range(steps):
-                self.step(i)
-                if i % 16 == 0:
-                    figs.append(self.draw())
+        with self.lock:
+            figs = []
+            # steps = round(seconds/self.step_size)
+            steps = type(self).TOTAL_TIME
+            for _ in range(loops):
+                for i in range(steps):
+                    self.step(i)
+                    if i % 16 == 0:
+                        figs.append(self.draw())
 
-        return figs
+            return figs
 
     def draw(self):
         """
