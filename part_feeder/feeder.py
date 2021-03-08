@@ -122,7 +122,7 @@ def init_callbacks(app):
 
         return create_page(points, search)
 
-    app.clientside_callback( # This clientside callback is a little bit of a hack but it works.
+    app.clientside_callback(  # This clientside callback is a little bit of a hack but it works.
         """
         function(n, value, data, holding_data, prev) {
             if (value !== "stop" && value !== prev) {
