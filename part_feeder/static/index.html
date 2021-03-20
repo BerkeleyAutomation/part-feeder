@@ -2,6 +2,7 @@
 <html>
 <head>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
     <style type="text/css">
         body{ 
             background-color: white; 
@@ -16,7 +17,7 @@
             width: 60vw;
             padding: 10px;
             text-align: center;
-            font-size: large;
+            /* font-size: large;*/
         }
         button {
             width: 25vw;
@@ -67,10 +68,11 @@
         var eps = 20
 
         // Draw the example part
-        var example = [{'x': 336, 'y': 238}, {'x': 249, 'y': 474}, {'x': 452, 'y': 541},
-            {'x': 619, 'y': 461}, {'x': 508, 'y': 262}, {'x': 393, 'y': 343}];
-        var exampleCh = [{'x': 336, 'y': 238}, {'x': 249, 'y': 474}, {'x': 452, 'y': 541},
-            {'x': 619, 'y': 461}, {'x': 508, 'y': 262}];
+        var example = [{'x': 350, 'y': 250}, {'x': 350, 'y': 540}, {'x': 450, 'y': 540},
+            {'x': 450, 'y': 450}, {'x': 500, 'y': 495}, {'x': 560, 'y': 425}, {'x': 450, 'y': 325},
+            {'x': 450, 'y': 250}];
+        var exampleCh = [{'x': 350, 'y': 250}, {'x': 350, 'y': 540}, {'x': 450, 'y': 540},
+            {'x': 500, 'y': 495}, {'x': 560, 'y': 425}, {'x': 450, 'y': 250}];
         function drawExample() {
             context.fillStyle = "#add8e6";
             context.strokeStyle = "#add8e6";
@@ -95,7 +97,9 @@
 
             context.fillStyle = "#000000";
             context.textAlign = "center";
-            context.font = "20px Times New Roman";
+            //context.font = "20px Times New Roman";
+            context.font = "20px Sans-serif";
+
             context.fillText("Orienting Polygonal Parts without Sensors", 400, 380);
             context.fillText("An Implementation in Python", 400, 400);
 

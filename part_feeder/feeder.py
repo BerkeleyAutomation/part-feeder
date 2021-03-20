@@ -1,6 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
 
 import plotly
@@ -22,6 +23,7 @@ displays = {}
 sq_anim = 'sq_anim'
 pg_anim = 'pg_anim'
 stop = 'stop'
+load_key = 'load'
 
 error_message = 'Error! Polygon vertices not correctly specified. Please go back to the previous page and try again.'
 
@@ -32,12 +34,16 @@ def init_feeder(server):
         routes_pathname_prefix='/feeder/',
         update_title=None,
         title='Part Feeder',
-        external_scripts=["https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"]
+        external_scripts=["https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"],
+        external_stylesheets=[dbc.themes.BOOTSTRAP]
         )
 
     dash_app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
-        html.Div(id='page_content'),       # this displays all the plots and explanations
+        html.Div(
+            id='page_content',
+            # style={'font-family': '"Times New Roman", Times, serif'}
+        ),       # this displays all the plots and explanations
         dcc.Interval(
             id='data_update_interval',
             interval=10_000,
@@ -80,10 +86,27 @@ def init_feeder(server):
             config={'displayModeBar': False, 'staticPlot': True}
             ),
         html.Div(
-            id='loading',
-            children='Loading...',
-            style={'margin': 'auto', 'width': '100%', 'padding': '10px', 'text-align': 'center', 'font-size': 'large'}
-            )
+            id='loading_div',
+            children=[
+                'Loading...', html.Br(),
+                 dbc.Progress(
+                    id='loading_bar'
+                ),
+                html.Div(
+                    id='loading_text',
+                    children=[],
+                    style={'margin': 'auto', 'width': '100%', 'padding': '10px',
+                           'text-align': 'center', 'font-size': 'large',
+                           'white-space': 'pre-wrap'}
+                ),
+                dcc.Interval(
+                    id='loading_interval',
+                    interval=500,
+                    disabled=False
+                )
+            ],
+            style={'display': 'block', 'width': '50%', 'left': '25%', 'position': 'absolute', 'top': '25%'}
+        )
         ]
     )
 
@@ -183,68 +206,116 @@ def init_callbacks(app):
     @app.callback(
         Output('anim_selector', 'style'),
         Output('anim', 'style'),
-        Output('loading', 'style'),
+        Output('loading_div', 'style'),
+        Output('loading_interval', 'disabled'),
         Input('page_content', 'children')
     )
     def show_anim(content):
         if content and content != error_message:
-            return {'display': 'block'}, {'display': 'block', 'height': '50vh', 'margin': 'auto'}, {'display': 'none'}
+            return {'display': 'block'}, {'display': 'block', 'height': '50vh', 'margin': 'auto'}, \
+                   {'display': 'none'}, True
         elif content == error_message:
-            return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
-        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
+            return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}, True
+        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}, False
+
+    @app.callback(
+        Output('loading_text', 'children'),
+        Output('loading_bar', 'value'),
+        Output('loading_bar', 'children'),
+        Input('loading_interval', 'n_intervals'),
+        State('url', 'search')
+    )
+    def pbar(_, search):
+        if search and search[0] == '?':
+            search = search[1:]
+
+        if displays[search]:
+            progress = len(displays[search][load_key]) / 18 * 100
+            return displays[search][load_key], round(progress), f'{round(progress)}%'
+
+        return [], 0, 0
+
+
+def update_loading(hash_str, message):
+    displays[hash_str][load_key].append(html.Code(children='{:<40s}'.format(message)))
+
+
+def update_loading_done(hash_str):
+    displays[hash_str][load_key][-1].children += 'done'
+    displays[hash_str][load_key].append(html.Br())
 
 
 def create_page(points, hash_str):
     s_domain = (0, 2*np.pi)     # s_domain refers to all squeeze function related domains
     pg_domain = (0, 4*np.pi)    # pg_domain refers to all push-grasp function related domains
 
+    displays[hash_str] = {load_key: []}
+
     ch = engine.convex_hull(points)
     antipodal_pairs = engine.antipodal_pairs(ch)
 
     # Diameter function
+    update_loading(hash_str, 'Generating diameter function')
     piecewise_diameter = engine.make_diameter_function(ch)
 
     bounded_piecewise_diameter = engine.generate_bounded_piecewise_func(piecewise_diameter, period=np.pi)
     diameter_callable = engine.generate_bounded_callable(bounded_piecewise_diameter, period=np.pi)
     diameter_maxima, diameter_minima = engine.find_bounded_extrema(bounded_piecewise_diameter,
                                                                    period=np.pi, domain=s_domain)
+    update_loading_done(hash_str)
 
     # Squeeze function
+    update_loading(hash_str, 'Generating squeeze function')
     squeeze_func = engine.generate_transfer_from_extrema(diameter_minima, diameter_maxima)
     squeeze_callable = engine.generate_transfer_extrema_callable(squeeze_func, period=np.pi)
+    update_loading_done(hash_str)
 
     # Radius function
+    update_loading(hash_str, 'Generating radius function')
     piecewise_radius = engine.make_radius_function(ch)
     bounded_piecewise_radius = engine.generate_bounded_piecewise_func(piecewise_radius, period=2*np.pi)
     radius_callable = engine.generate_bounded_callable(bounded_piecewise_radius, period=2*np.pi)
     radius_maxima, radius_minima = engine.find_bounded_extrema(bounded_piecewise_radius,
                                                                period=2*np.pi, domain=pg_domain)
+    update_loading_done(hash_str)
 
     # Push function
+    update_loading(hash_str, 'Generating push function')
     push_func = engine.generate_transfer_from_extrema(radius_minima, radius_maxima)
     push_callable = engine.generate_transfer_extrema_callable(push_func, period=2*np.pi)
+    update_loading_done(hash_str)
 
     # Push-grasp function
+    update_loading(hash_str, 'Generating push-grasp function')
     extended_squeeze = engine.generate_transfer_from_extrema(
         *reversed(engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain, buffer=2))
     )
     push_grasp_func = engine.generate_bounded_push_grasp_function(push_func, extended_squeeze)
     push_grasp_callable = engine.generate_transfer_extrema_callable(push_grasp_func, period=2*np.pi)
+    update_loading_done(hash_str)
 
     # generate squeeze plan
+    update_loading(hash_str, 'Generating squeeze plan')
     sq_intervals = engine.generate_intervals(squeeze_func, default_T=np.pi)
     sq_plan = engine.generate_plan(sq_intervals)
+    update_loading_done(hash_str)
 
     # generate push-grasp plan
+    update_loading(hash_str, 'Generating push-grasp plan')
     pg_intervals = engine.generate_intervals(push_grasp_func, default_T=2*np.pi)
     pg_plan = engine.generate_plan(pg_intervals)
+    update_loading_done(hash_str)
 
     # create display
+    update_loading(hash_str, 'Generating animation simulator')
     d1 = anim.SqueezeDisplay(points, sq_plan, diameter_callable, squeeze_callable)
     d2 = anim.PushGraspDisplay(points, pg_plan, radius_callable, diameter_callable, push_callable, push_grasp_callable)
-    displays[hash_str] = {sq_anim: d1, pg_anim: d2}
+    displays[hash_str][sq_anim] = d1
+    displays[hash_str][pg_anim] = d2
+    update_loading_done(hash_str)
 
     # Create figures
+    update_loading(hash_str, 'Generating plots')
     ch_ap_graph = create_graph_from_figure(
         create_antipodal_pairs_figure(points, ch, antipodal_pairs), 'ch_ap_fig')
     dia_graph = create_graph_from_figure(
@@ -259,6 +330,7 @@ def create_page(points, hash_str):
 
     pg_graph = create_graph_from_figure(
         create_transfer_figure(push_grasp_callable, pg_domain), 'pg_fig')
+    update_loading_done(hash_str)
 
     return [explanations.ch_ap, ch_ap_graph, 
             explanations.dia, dia_graph, 
