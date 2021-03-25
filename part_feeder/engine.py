@@ -364,11 +364,11 @@ def find_bounded_extrema(bounded_piecewise_func, period, domain, buffer=1):
         count = 1
 
         # first expand the extrema
-        while extrema[0] > domain[0]:
+        while extrema[min(buffer - 1, len(extrema) - 1)] > domain[0]:
             extrema = np.hstack((extrema_base-count*period, extrema))
             count += 1
         count = 1
-        while extrema[-1] < domain[1]:
+        while extrema[max(-buffer, -len(extrema))] < domain[1]:
             extrema = np.hstack((extrema, extrema_base+count*period))
             count += 1
 

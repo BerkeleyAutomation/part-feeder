@@ -289,7 +289,7 @@ def create_page(points, hash_str):
     # Push-grasp function
     update_loading(hash_str, 'Generating push-grasp function')
     extended_squeeze = engine.generate_transfer_from_extrema(
-        *reversed(engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain, buffer=2))
+        *reversed(engine.find_bounded_extrema(bounded_piecewise_diameter, period=np.pi, domain=pg_domain, buffer=4))
     )
     push_grasp_func = engine.generate_bounded_push_grasp_function(push_func, extended_squeeze)
     push_grasp_callable = engine.generate_transfer_extrema_callable(push_grasp_func, period=2 * np.pi)
