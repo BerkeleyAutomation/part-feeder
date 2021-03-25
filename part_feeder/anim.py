@@ -13,6 +13,8 @@ from threading import Lock
 import plotly.graph_objs as go
 import plotly
 
+from typing import Tuple, List, Union
+
 
 class Gripper:
     """A pair of parallel plate grippers"""
@@ -45,18 +47,22 @@ class Gripper:
         # bottom gripper
         self.bot_vel = Vec2d(self.vel_x, self.vel_y)  # squeeze velocity vector
         self.bot_pos = Vec2d(x - self.x_offset, y - self.y_offset)  # starting position vector
+        self.bot: pymunk.Body
+        self.bot_seg: pymunk.Segment
         self.bot, self.bot_seg = Gripper.make_gripper(self.bot_pos, length, angle)
 
         # top gripper
         self.top_vel = -Vec2d(self.vel_x, self.vel_y)  # squeeze velocity vector
         self.top_pos = Vec2d(x + self.x_offset, y + self.y_offset)  # starting position vector
+        self.top: pymunk.Body
+        self.top_seg: pymunk.Segment
         self.top, self.top_seg = Gripper.make_gripper(self.top_pos, length, angle)
 
     @staticmethod
-    def make_gripper(pos, length, angle, radius=2):
+    def make_gripper(pos, length, angle, radius=2) -> Tuple[pymunk.Body, pymunk.Segment]:
         """Creates a single jaw of a gripper. Grippers are represented as kinematic bodies with
         line segments for shape. They are frictionless."""
-        body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
+        body: pymunk.Body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
         body.position = pos
         body.angle = angle
 
@@ -183,9 +189,9 @@ class Display:
         self.space.damping = 1
         self.step_size = 1 / 50  # time between each frame
 
-        self.grippers = [[] for _ in self.rows]
+        self.grippers: List[List[Gripper]] = [[] for _ in self.rows]
         self.init_grippers()
-        self.polygons = [[] for _ in self.rows]
+        self.polygons: List[List[Polygon]] = [[] for _ in self.rows]
 
         self.init_draw_points()
 
@@ -283,27 +289,8 @@ class Display:
         traces = []
 
         for shape in self.space.shapes:
-            theta = shape.body.angle
-
-            # rotation matrix
-            s, c = np.sin(theta), np.cos(theta)
-            matrix = np.array([[c, -s],
-                               [s, c]])
-
-            # body position in world coordinates
-            x, y = shape.body.position
-            pos = np.array([x, y]).reshape((2, 1))
-
             if type(shape) is pymunk.Segment:
-                x1, y1 = shape.a
-                x2, y2 = shape.b
-
-                # segment endpoints in local coordinates
-                points = np.array(
-                    [[x1, x2],
-                     [y1, y2]])
-
-                rotated = np.dot(matrix, points) + pos
+                rotated = self.get_shape_point_vector(shape)
 
                 line = {
                     'type': 'scatter',
@@ -318,8 +305,9 @@ class Display:
                 traces.append(line)
 
             elif type(shape) is pymunk.Poly:
-                rotated = np.dot(matrix, self.draw_points) + pos
-                rotated_line = np.dot(matrix, self.thick_line) + pos
+                # rotated = np.dot(matrix, self.draw_points) + pos
+                # rotated_line = np.dot(matrix, self.thick_line) + pos
+                rotated, rotated_line = self.get_shape_point_vector(shape)
 
                 poly = {
                     'type': 'scatter',
@@ -359,6 +347,42 @@ class Display:
                 # traces.append(debug_line_fig)
 
         return traces
+
+    def get_shape_point_vector(self, shape: pymunk.Shape) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """
+        Returns the position of the vertices of a shape (either a segment or a polygon) in world coordinates.
+        Returns the points in vector form, i.e. each (x, y) point is a column, and row 0 is the x coordinates and row
+        1 is the y coordinates.
+        """
+        theta = shape.body.angle
+
+        # rotation matrix
+        s, c = np.sin(theta), np.cos(theta)
+        matrix = np.array([[c, -s],
+                           [s, c]])
+
+        # body position in world coordinates
+        x, y = shape.body.position
+        pos = np.array([x, y]).reshape((2, 1))
+
+        if type(shape) is pymunk.Segment:
+            x1, y1 = shape.a
+            x2, y2 = shape.b
+
+            # segment endpoints in local coordinates
+            points = np.array(
+                [[x1, x2],
+                 [y1, y2]])
+
+            rotated = np.dot(matrix, points) + pos
+
+            return rotated
+
+        elif type(shape) is pymunk.Poly:
+            rotated = np.dot(matrix, self.draw_points) + pos
+            rotated_line = np.dot(matrix, self.thick_line) + pos
+
+            return rotated, rotated_line
 
 
 class SqueezeDisplay(Display):
@@ -457,15 +481,27 @@ class SqueezeDisplay(Display):
                     if i < len(self.polygons[0]):
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_rotate_angle[row_idx][i]) \
                                 < 0.05:
-                            stop = True
-                    if abs(distance - self.grippers_min_dist[row_idx][i]) < 3:
-                        stop = True
-                    elif distance < 3:
+                            self.polygons[row_idx][i].poly.filter = Polygon.move_filter
+
+                            # only stop the gripper when collision is confirmed to ensure that gripper closes all the way
+                            pos_top, pos_bot = self.get_shape_point_vector(g.top_seg), self.get_shape_point_vector(g.bot_seg)
+                            collide_top: bool = self.polygons[row_idx][i].poly.segment_query(
+                                tuple(pos_top[:, 0]), tuple(pos_top[:, 1])).shape is not None
+                            collide_bot: bool = self.polygons[row_idx][i].poly.segment_query(
+                                tuple(pos_bot[:, 0]), tuple(pos_bot[:, 1])).shape is not None
+
+                            if collide_top:
+                                g.top.velocity = 0, 0
+                            if collide_bot:
+                                g.bot.velocity = 0, 0
+                            if collide_top and collide_bot:
+                                stop = True
+                    if abs(distance - self.grippers_min_dist[row_idx][i]) < 3 or distance < 3:
                         stop = True
                     if stop:
                         g.stop()
                         if i < len(self.polygons[0]):
-                            self.polygons[row_idx][i].poly.filter = Polygon.move_filter
+                            # self.polygons[row_idx][i].poly.filter = Polygon.move_filter
                             self.polygons[row_idx][i].body.angle = self.stop_rotate_angle[row_idx][i]
 
         elif dt == 350:
@@ -482,7 +518,6 @@ class SqueezeDisplay(Display):
             for r in self.grippers:
                 for g in r:
                     g.limit_unsqueeze()
-
 
 
 class PushGraspDisplay(Display):
@@ -604,9 +639,17 @@ class PushGraspDisplay(Display):
                         distance = g.bot.position.get_distance(self.polygons[row_idx][i].body.position)
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_push_angle[row_idx][i]) \
                                 < 0.05 or abs(distance - self.gripper_push_dist[row_idx][i]) < 3:
-                            stop = True
-                            # self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
-                            # self.polygons[row_idx][i].poly.filter = Polygon.move_filter
+                            self.polygons[row_idx][i].poly.filter = Polygon.move_filter
+
+                            # only stop the push action to ensure that push animation occurs
+                            pos_bot = self.get_shape_point_vector(g.bot_seg)
+                            collide_bot: bool = self.polygons[row_idx][i].poly.segment_query(
+                                tuple(pos_bot[:, 0]), tuple(pos_bot[:, 1])).shape is not None
+
+                            if collide_bot:
+                                g.bot.velocity = 0, 0
+                                stop = True
+                                # self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
 
                     elif abs(g.bot.position.get_distance(g.bot_pos) - self.gripper_push_dist[row_idx][i]) < 3:
                         stop = True
@@ -634,14 +677,28 @@ class PushGraspDisplay(Display):
                     if i < len(self.polygons[0]):
                         if abs(self.polygons[row_idx][i].body.angle % (2 * np.pi) - self.stop_squeeze_angle[row_idx][i]) \
                                 < 0.05:
-                            stop = True
+                            self.polygons[row_idx][i].poly.filter = Polygon.move_filter
+
+                            # only stop the gripper when collision is confirmed to ensure that gripper closes all the way
+                            pos_top, pos_bot = self.get_shape_point_vector(g.top_seg), self.get_shape_point_vector(g.bot_seg)
+                            collide_top: bool = self.polygons[row_idx][i].poly.segment_query(
+                                tuple(pos_top[:, 0]), tuple(pos_top[:, 1])).shape is not None
+                            collide_bot: bool = self.polygons[row_idx][i].poly.segment_query(
+                                tuple(pos_bot[:, 0]), tuple(pos_bot[:, 1])).shape is not None
+
+                            if collide_top:
+                                g.top.velocity = 0, 0
+                            if collide_bot:
+                                g.bot.velocity = 0, 0
+                            if collide_top and collide_bot:
+                                stop = True
                     if abs(distance - self.gripper_squeeze_dist[row_idx][i]) < 3 or distance < 3:
                         stop = True
 
                     if stop:
                         g.stop()
                         if i < len(self.polygons[0]):
-                            self.polygons[row_idx][i].poly.filter = Polygon.move_filter
+                            # self.polygons[row_idx][i].poly.filter = Polygon.move_filter
                             self.polygons[row_idx][i].body.angle = self.stop_squeeze_angle[row_idx][i]
 
         elif dt == 500:

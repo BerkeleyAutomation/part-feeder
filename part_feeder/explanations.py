@@ -37,12 +37,17 @@ sq = dcc.Markdown('''
     ## The Squeeze Function
     
     The squeeze function is a transfer function that represents the output orientation of the part with
-    respect to the gripper if the polygon was squeezed at a certain angle. This is computed by mapping
-    ranges between local maxima to the local minimum in between. For more info on the squeeze function, 
-    see Goldberg (1993). 
+    respect to the gripper if the polygon was squeezed at a that angle with respect to the gripper. This is 
+    computed by mapping ranges between local maxima to the local minimum in between. For more info on 
+    the squeeze function, see Goldberg (1993). 
     
     The discontinuities in the squeeze function define s-intervals and s-images, which are used to
-    compute the plan. 
+    compute the plan to orient the part. Below the x-axis in blue are the s-intervals found by the 
+    backchaining algorithm, and to the left of the y-axis are the corresponding s-images. The s-interval
+    on the top is the first interval found, corresponding to the largest single step in the squeeze function,
+    while the interval on the bottom is the last interval found. Going from bottom to top, notice that 
+    the s-intervals (and corresponding s-images) get smaller. This allows the backchaining algorithm to
+    "funnel" the part into a unique final orientation. 
     ''',
     style={'width': '70vw', 'margin': 'auto', 'text-align': 'center'}
 )
@@ -68,7 +73,7 @@ pu = dcc.Markdown('''
     function. For more information on the push and radius function, see Goldberg (1993).
     
     The push function is used to compute the push-grasp function, another transfer function that is used
-    to compute a different that avoids unrealistic assumptions used in the squeeze function.
+    to compute a push-grasp plan.
     ''',
     style={'width': '70vw', 'margin': 'auto', 'text-align': 'center'}
 )
@@ -77,8 +82,13 @@ pg = dcc.Markdown('''
     ## The Push-Grasp Function
     
     The push-grasp function is computed by composing the push function with the squeeze function. This
-    function (more specifically, its discontinuities) are used to generate a plan to orient the part
-    up to symmetry.
+    function (more specifically, its discontinuities) are used to generate a different plan that avoids
+    several assumptions used in the squeeze function; in particular, the two jaws are no longer required 
+    to contact the polygonal part at exactly the same time. At the same time, the plan orients the part
+    to a _unique_ final orientation, instead of just up to symmetry. 
+    
+    As in the squeeze function plot, the s-intervals and corresponding s-images are below the x-axis 
+    and to the right of the y-axis. 
     ''',
     style={'width': '70vw', 'margin': 'auto', 'text-align': 'center'}
 )

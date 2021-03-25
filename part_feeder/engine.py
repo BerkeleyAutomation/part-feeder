@@ -488,7 +488,7 @@ class Interval:
     def __init__(self, a, b, image):
         self.a = a
         self.b = b
-        self.image = image
+        self.image: Image = image
 
     def __abs__(self):
         return self.b - self.a
@@ -530,7 +530,7 @@ def generate_intervals(transfer_func, default_T=np.pi):
     # Step 2 of algorithm: find widest single step
     max_single_step = Interval(0, 0, None)
     for a, b, t in transfer_func:
-        if b - a > abs(max_single_step) and not np.isclose(b - a, abs(max_single_step)):
+        if (a > 0 or np.isclose(a, 0)) and b - a > abs(max_single_step) and not np.isclose(b - a, abs(max_single_step)):
             max_single_step = Interval(a, b, Image(t, t))
 
     intervals.append(max_single_step)
@@ -538,10 +538,11 @@ def generate_intervals(transfer_func, default_T=np.pi):
     # For step 3, we need to generate all possible s-intervals with nonzero measure
     all_intervals = []
     for i in range(len(transfer_func) - 1):
-        for j in range(i + 1, len(transfer_func)):
-            image = Image(transfer_func[i][2], transfer_func[j][2])
-            interval = Interval(transfer_func[i][0], transfer_func[j][1], image)
-            all_intervals.append(interval)
+        if transfer_func[i][0] > 0 or np.isclose(transfer_func[i][0], 0):
+            for j in range(i + 1, len(transfer_func)):
+                image = Image(transfer_func[i][2], transfer_func[j][2])
+                interval = Interval(transfer_func[i][0], transfer_func[j][1], image)
+                all_intervals.append(interval)
 
     # For step 3, we also need to compute the periodicity in the transfer (squeeze or push-grasp)
     # function, which is the termination condition for the loop in step 3 of the algorithm.
@@ -559,18 +560,20 @@ def generate_intervals(transfer_func, default_T=np.pi):
         # pprint.pprint(valid_ints)
 
         # Part 2: set the next interval to the widest such interval
-        widest = valid_ints[0]
-        for i in valid_ints[1:]:
-            if abs(i) > abs(widest):
+        widest, widest_idx = valid_ints[0], 0
+        for c, i in enumerate(valid_ints[1:]):
+            if abs(i) > abs(widest) and not np.isclose(abs(i), abs(widest)):
                 widest = i
+                widest_idx = c
             elif np.isclose(abs(i), abs(widest)) and \
                     abs(i.image) < abs(widest.image) and \
                     not np.isclose(abs(i.image), abs(widest.image)):
                 # this block deals with ties for the largest interval by picking the interval
                 # with the smallest image. 
                 widest = i
+                widest_idx = c
 
-        all_intervals.remove(widest)
+        del all_intervals[widest_idx]
         intervals.append(widest)
 
     return intervals
