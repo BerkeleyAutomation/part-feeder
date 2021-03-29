@@ -2,16 +2,19 @@
 <html>
 <head>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+          integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
     <style type="text/css">
-        body{ 
-            background-color: white; 
+        body {
+            background-color: white;
         }
-        #canvas{
+
+        #canvas {
             border: 1px solid #ff0000;
             margin: auto;
             display: block;
         }
+
         .center {
             margin: auto;
             width: 60vw;
@@ -19,6 +22,7 @@
             text-align: center;
             /* font-size: large;*/
         }
+
         button {
             width: 25vw;
             font-size: 20px;
@@ -26,203 +30,229 @@
     </style>
 </head>
 <body>
-    <div class="center">
-        <h2>Orienting Polygonal Parts without Sensors: An Implementation in Python</h2>
-        <br>
-        This website is an implementation of <a href="https://goldberg.berkeley.edu/">Prof. Ken Goldberg's</a>
-        1993 PhD thesis, <a href="https://goldberg.berkeley.edu/pubs/algo93.pdf">Orienting Polygonal Parts Without Sensors</a>.
-        To begin, click "New Part" to clear the canvas and begin clicking points on the canvas to draw a polygon.
-        Once you have completed drawing your polygon, click the first point on the polygon to complete it and
-        press the "Next" button below the canvas to see the algorithm in action. Please note that this website does not
-        work on mobile platforms.
-        <br><br>
-        <button id="newPart">New Part</button>
-        <br><br>
-        <canvas id="canvas" width=800px height=800px></canvas>
-        <br>
-        <button id="generatePlan">Next</button>
-    </div>
-    <div class="center">
-        Made by <a href="https://github.com/vincentkslim" target="_blank" rel="noopener noreferrer">Vincent Lim</a>.
-        Version 1.5. <a href="https://github.com/vincentkslim/part-feeder" target="_blank" rel="noopener noreferrer">Source</a>.
-    </div>
-    <script type="text/javascript">
-        var canvas=document.getElementById("canvas");
-        var context=canvas.getContext("2d");
-        var cw=canvas.width;
-        var ch=canvas.height;
-        function reOffset(){
-            var BB=canvas.getBoundingClientRect();
-            offsetX=BB.left;
-            offsetY=BB.top;        
-        }
-        var offsetX,offsetY;
+<div class="center">
+    <h2>Orienting Polygonal Parts without Sensors: An Implementation in Python</h2>
+    <br>
+    This website is an implementation of <a href="https://goldberg.berkeley.edu/">Prof. Ken Goldberg's</a>
+    1993 PhD thesis, <a href="https://goldberg.berkeley.edu/pubs/algo93.pdf">Orienting Polygonal Parts Without
+    Sensors</a>.
+    To begin, click "New Part" to clear the canvas and begin clicking points on the canvas to draw a polygon.
+    Once you have completed drawing your polygon, click the first point on the polygon to complete it and
+    press the "Next" button below the canvas to see the algorithm in action. Please note that this website does not
+    work on mobile platforms.
+    <br><br>
+    <button id="newPart">New Part</button>
+    <br><br>
+    <canvas id="canvas" width=800px height=800px></canvas>
+    <br>
+    <button id="generatePlan">Next</button><button id="default" style="display: none">Use default part</button>
+</div>
+<div class="center">
+    <span id="len"></span> part(s) served so far.
+    <br>
+    Made by <a href="https://github.com/vincentkslim" target="_blank" rel="noopener noreferrer">Vincent Lim</a>.
+    Version 1.5. <a href="https://github.com/vincentkslim/part-feeder" target="_blank"
+                    rel="noopener noreferrer">Source</a>.
+</div>
+<script type="text/javascript">
+    var canvas = document.getElementById("canvas");
+    var context = canvas.getContext("2d");
+    var cw = canvas.width;
+    var ch = canvas.height;
+
+    function reOffset() {
+        var BB = canvas.getBoundingClientRect();
+        offsetX = BB.left;
+        offsetY = BB.top;
+    }
+
+    var offsetX, offsetY;
+    reOffset();
+    window.onscroll = function (e) {
         reOffset();
-        window.onscroll=function(e){ reOffset(); }
+    }
+    window.onresize = function (e) {
+        reOffset()
+    }
 
-        context.lineWidth=2;
-        context.strokeStyle='blue';
+    context.lineWidth = 2;
+    context.strokeStyle = 'blue';
 
-        var coordinates = [];
-        var isDone = false;
-        var addedHandler = false;
-        var eps = 20
+    var coordinates = [];
+    var isDone = false;
+    var addedHandler = false;
+    var eps = 20
 
-        // Draw the example part
-        var example = [{'x': 350, 'y': 250}, {'x': 350, 'y': 540}, {'x': 450, 'y': 540},
-            {'x': 450, 'y': 450}, {'x': 500, 'y': 495}, {'x': 560, 'y': 425}, {'x': 450, 'y': 325},
-            {'x': 450, 'y': 250}];
-        var exampleCh = [{'x': 350, 'y': 250}, {'x': 350, 'y': 540}, {'x': 450, 'y': 540},
-            {'x': 500, 'y': 495}, {'x': 560, 'y': 425}, {'x': 450, 'y': 250}];
-        function drawExample() {
-            context.fillStyle = "#add8e6";
-            context.strokeStyle = "#add8e6";
-            context.clearRect(0,0,cw,ch);
-            context.beginPath();
-            context.moveTo(example[0].x, example[0].y);
-            for(index=1; index<example.length;index++) {
-                context.lineTo(example[index].x, example[index].y);
-            }
-            context.closePath();
-            context.fill();
+    // Draw the example part
+    var example = [{'x': 350, 'y': 250}, {'x': 350, 'y': 540}, {'x': 450, 'y': 540},
+        {'x': 450, 'y': 450}, {'x': 500, 'y': 495}, {'x': 560, 'y': 425}, {'x': 450, 'y': 325},
+        {'x': 450, 'y': 250}];
+    var exampleCh = [{'x': 350, 'y': 250}, {'x': 350, 'y': 540}, {'x': 450, 'y': 540},
+        {'x': 500, 'y': 495}, {'x': 560, 'y': 425}, {'x': 450, 'y': 250}];
 
-            context.strokeStyle = "#D3D3D3";
-            context.beginPath();
-            context.moveTo(exampleCh[0].x, exampleCh[0].y);
-            for(index=1; index<exampleCh.length;index++) {
-                context.lineTo(exampleCh[index].x, exampleCh[index].y);
-            }
-            context.closePath();
+    function drawExample() {
+        context.fillStyle = "#add8e6";
+        context.strokeStyle = "#add8e6";
+        context.clearRect(0, 0, cw, ch);
+        context.beginPath();
+        context.moveTo(example[0].x, example[0].y);
+        for (index = 1; index < example.length; index++) {
+            context.lineTo(example[index].x, example[index].y);
+        }
+        context.closePath();
+        context.fill();
 
-            context.stroke();
+        context.strokeStyle = "#D3D3D3";
+        context.beginPath();
+        context.moveTo(exampleCh[0].x, exampleCh[0].y);
+        for (index = 1; index < exampleCh.length; index++) {
+            context.lineTo(exampleCh[index].x, exampleCh[index].y);
+        }
+        context.closePath();
 
-            context.fillStyle = "#000000";
-            context.textAlign = "center";
-            //context.font = "20px Times New Roman";
-            context.font = "20px Sans-serif";
+        context.stroke();
 
-            context.fillText("Orienting Polygonal Parts without Sensors", 400, 380);
-            context.fillText("An Implementation in Python", 400, 400);
+        context.fillStyle = "#000000";
+        context.textAlign = "center";
+        //context.font = "20px Times New Roman";
+        context.font = "20px Sans-serif";
 
-            context.fillText("Winter 2020, UC Berkeley AUTOLab", 400, 440);
+        context.fillText("Orienting Polygonal Parts without Sensors", 400, 380);
+        context.fillText("An Implementation in Python", 400, 400);
 
-            context.fillText("Click \"New Part\" to clear the canvas and begin drawing.", 400, 480);
+        context.fillText("Winter 2020, UC Berkeley AUTOLab", 400, 440);
+
+        context.fillText("Click \"New Part\" to clear the canvas and begin drawing.", 400, 480);
+    }
+
+    drawExample();
+
+    $("#newPart").click(function (e) {
+        //reset the canvas
+        context.clearRect(0, 0, cw, ch);
+        context.strokeStyle = "#000000";
+        isDone = false;
+        coordinates.length = 0;
+
+        // Only add the mousedown and mousemove handler once
+        if (!addedHandler) {
+            $("#canvas").mousedown(function (e) {
+                handleMouseDown(e);
+            });
+            $("#canvas").mousemove(function (e) {
+                handleMouseMove(e);
+            });
+        }
+        addedHandler = true;
+    })
+
+    // Parses points into query string and redirects the page
+    $("#generatePlan").click(function () {
+        generatePlan();
+    });
+
+    $("#default").click(function () {
+        coordinates = example;
+        generatePlan();
+    })
+
+    function parsePoint(e) {
+        mouseX = parseInt(e.clientX - offsetX);
+        mouseY = parseInt(e.clientY - offsetY);
+
+        point = {x: mouseX, y: mouseY};
+
+        if (coordinates.length > 1 && dist(point, coordinates[0]) < eps) {
+            point = coordinates[0];
         }
 
-        drawExample();
+        return point;
+    }
 
-        $("#newPart").click(function (e) {
-            //reset the canvas
-            context.clearRect(0,0,cw,ch);
-            context.strokeStyle = "#000000";
-            isDone = false;
-            coordinates.length = 0;
+    function dist(p1, p2) {
+        var a = p1.x - p2.x;
+        var b = p1.y - p2.y;
 
-            // Only add the mousedown and mousemove handler once
-            if (!addedHandler) {
-                $("#canvas").mousedown(function (e) {
-                    handleMouseDown(e);
-                });
-                $("#canvas").mousemove(function (e) {
-                    handleMouseMove(e);
-                });
+        return Math.hypot(a, b);
+    }
+
+    function handleMouseMove(e) {
+        if (isDone || coordinates.length < 1) {
+            return;
+        }
+
+        point = parsePoint(e);
+        drawPolygon(point);
+    }
+
+    function handleMouseDown(e) {
+        if (isDone) {
+            return;
+        }
+
+        // tell the browser we're handling this event
+        e.preventDefault();
+        e.stopPropagation();
+
+        point = parsePoint(e);
+        if (point == coordinates[0]) {
+            isDone = true;
+        } else {
+            coordinates.push({x: mouseX, y: mouseY});
+        }
+        drawPolygon(null);
+        //console.info(coordinates)
+    }
+
+    function drawPolygon(extraPoint) {
+        context.clearRect(0, 0, cw, ch);
+        context.beginPath();
+        context.moveTo(coordinates[0].x, coordinates[0].y);
+        for (index = 1; index < coordinates.length; index++) {
+            context.lineTo(coordinates[index].x, coordinates[index].y);
+        }
+        if (extraPoint != null) {
+            context.lineTo(extraPoint.x, extraPoint.y)
+        }
+        if (isDone) {
+            context.closePath();
+        }
+        context.stroke();
+    }
+
+    function generatePlan() {
+        var x = [];
+        var y = [];
+
+        for (i = 0; i < coordinates.length; i++) {
+            x.push(coordinates[i].x);
+            y.push(ch - coordinates[i].y);        // need to shift origin to bottom left corner
+        }
+        var xQuery = arrayToQuery(x, "x");
+        var yQuery = arrayToQuery(y, "y");
+        var query = xQuery + "&" + yQuery
+        //console.info(coordinates);
+
+        window.location.href = window.location.href + "/feeder/?" + query
+    }
+
+    function arrayToQuery(arr, field) {
+        var ret = "";
+        for (i = 0; i < coordinates.length; i++) {
+            ret += field + "=" + arr[i];
+            if (i != coordinates.length - 1) {
+                ret += "&";
             }
-            addedHandler = true;
-        })
+        }
 
-        // Parses points into query string and redirects the page
-        $("#generatePlan").click(function() {
-            generatePlan();
+        return ret;
+    }
+
+    fetch(window.location.protocol + "//" + window.location.host + "/part-feeder/len/").then(function (response) {
+        response.json().then(function (json) {
+            document.getElementById("len").textContent = json["len"];
         });
-
-        function parsePoint(e) {
-            mouseX=parseInt(e.clientX-offsetX);
-            mouseY=parseInt(e.clientY-offsetY);
-
-            point = {x:mouseX,y:mouseY};
-
-            if(coordinates.length > 1 && dist(point, coordinates[0]) < eps) {
-                point = coordinates[0];
-            }
-
-            return point;
-        }
-
-        function dist(p1, p2) {
-            var a = p1.x - p2.x;
-            var b = p1.y - p2.y;
-
-            return Math.hypot(a, b);
-        }
-
-        function handleMouseMove(e){
-            if(isDone || coordinates.length < 1){
-                return;
-            }
-
-            point = parsePoint(e);
-            drawPolygon(point);
-        }
-        function handleMouseDown(e){
-            if(isDone){return;}
-
-            // tell the browser we're handling this event
-            e.preventDefault();
-            e.stopPropagation();
-
-            point = parsePoint(e);
-            if(point == coordinates[0]) {
-                isDone = true;
-            } else {
-                coordinates.push({x:mouseX,y:mouseY});
-            }
-            drawPolygon(null);
-            //console.info(coordinates)
-        }
-
-        function drawPolygon(extraPoint){
-            context.clearRect(0,0,cw,ch);
-            context.beginPath();
-            context.moveTo(coordinates[0].x, coordinates[0].y);
-            for(index=1; index<coordinates.length;index++) {
-                context.lineTo(coordinates[index].x, coordinates[index].y);
-            }
-            if(extraPoint != null) {
-                context.lineTo(extraPoint.x, extraPoint.y)
-            }
-            if (isDone) {
-                context.closePath();
-            }
-            context.stroke();
-        }
-
-        function generatePlan() {
-            var x = [];
-            var y = [];
-
-            for (i=0; i<coordinates.length; i++) {
-                x.push(coordinates[i].x);
-                y.push(ch-coordinates[i].y);        // need to shift origin to bottom left corner
-            }
-            var xQuery = arrayToQuery(x, "x");
-            var yQuery = arrayToQuery(y, "y");
-            var query = xQuery + "&" + yQuery
-            //console.info(coordinates);
-
-            window.location.href = "/feeder/?" + query
-        }
-
-        function arrayToQuery(arr, field) {
-            var ret = "";
-            for(i=0; i<coordinates.length; i++) {
-                ret += field + "=" + arr[i];
-                if (i != coordinates.length-1) {
-                    ret += "&";
-                }
-            }
-
-            return ret;
-        }
+    });
 </script>
 </body>
 </html>

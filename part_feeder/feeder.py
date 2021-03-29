@@ -33,7 +33,7 @@ def init_feeder(server):
     """Create the plots using plotly and dash."""
     dash_app = dash.Dash(
         server=server,
-        routes_pathname_prefix='/feeder/',
+        routes_pathname_prefix='/part-feeder/feeder/',
         update_title=None,
         title='Part Feeder',
         external_scripts=["https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"],
@@ -43,49 +43,60 @@ def init_feeder(server):
     dash_app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
         html.Div(
-            id='page_content',
-            # style={'font-family': '"Times New Roman", Times, serif'}
-        ),  # this displays all the plots and explanations
-        dcc.Interval(
-            id='data_update_interval',
-            interval=10_000,
-            disabled=False
-        ),
-        dcc.Interval(
-            id='anim_update_interval',
-            interval=50,
-            disabled=False
-        ),
-        dcc.Store(
-            id='anim_data',
-            data=[],
-            storage_type='memory'
-        ),
-        dcc.Store(
-            id='anim_holding_data',  # hold data here, wait for clientside callback to update it.
-            data=[],
-            storage_type='memory'
-        ),
-        dcc.Store(
-            id='prev_anim',
-            storage_type='memory'
-        ),
-        dcc.Dropdown(  # dropdown selector to determine which animation to display.
-            id='anim_selector',
-            options=[
-                {'label': 'Squeeze Plan', 'value': sq_anim},
-                {'label': 'Push Grasp Plan', 'value': pg_anim},
-                {'label': 'Stop Animation', 'value': stop}
-            ],
-            searchable=False,
-            style={'display': 'none'},
-            clearable=False,
-            value=pg_anim
-        ),
-        dcc.Graph(  # animation figure
-            id='anim',
-            style={'height': '50vh', 'margin': 'auto', 'display': 'none'},
-            config={'displayModeBar': False, 'staticPlot': True}
+            id='page-content',
+            style={'visibility': 'hidden'},
+            children=[
+                html.Div(
+                    id='plots',
+                    # style={'font-family': '"Times New Roman", Times, serif'}
+                ),  # this displays all the plots and explanations
+                dcc.Interval(
+                    id='data_update_interval',
+                    interval=10_000,
+                    disabled=False
+                ),
+                dcc.Interval(
+                    id='anim_update_interval',
+                    interval=50,
+                    disabled=False
+                ),
+                dcc.Store(
+                    id='anim_data',
+                    data=[],
+                    storage_type='memory'
+                ),
+                dcc.Store(
+                    id='anim_holding_data',  # hold data here, wait for clientside callback to update it.
+                    data=[],
+                    storage_type='memory'
+                ),
+                dcc.Store(
+                    id='prev_anim',
+                    storage_type='memory'
+                ),
+                dcc.Dropdown(  # dropdown selector to determine which animation to display.
+                    id='anim_selector',
+                    options=[
+                        {'label': 'Squeeze Plan', 'value': sq_anim},
+                        {'label': 'Push Grasp Plan', 'value': pg_anim},
+                        {'label': 'Stop Animation', 'value': stop}
+                    ],
+                    searchable=False,
+                    style={'display': 'block'},
+                    clearable=False,
+                    value=pg_anim
+                ),
+                dcc.Graph(  # animation figure
+                    id='anim',
+                    style={'height': '50vh', 'margin': 'auto', 'display': 'block'},
+                    config={'displayModeBar': False, 'staticPlot': True}
+                ),
+                html.Div(
+                    id='contact',
+                    style={'text-align': 'center'},
+                    children='Questions? Contact us at: vincentklim AT berkeley.edu or goldberg AT berkeley.edu'
+                )
+            ]
         ),
         html.Div(
             id='loading_div',
@@ -119,7 +130,7 @@ def init_feeder(server):
 
 def init_callbacks(app):
     @app.callback(
-        Output('page_content', 'children'),
+        Output('plots', 'children'),
         Input('url', 'search'))
     def display_feeder(search: str):
         """
@@ -196,7 +207,7 @@ def init_callbacks(app):
                 return [], True, True, prev
 
             # selector has not changed. continue calling for data.
-            elif d and value != stop:
+            elif d and value != stop and d.get(value):
                 return d.get(value).step_draw(loops=loops), False, False, value
         # print('I got here! disabling update intervals. ')
         if value == stop:
@@ -205,19 +216,17 @@ def init_callbacks(app):
             return [], False, False, value
 
     @app.callback(
-        Output('anim_selector', 'style'),
-        Output('anim', 'style'),
+        Output('page-content', 'style'),
         Output('loading_div', 'style'),
         Output('loading_interval', 'disabled'),
-        Input('page_content', 'children')
+        Input('plots', 'children')
     )
     def show_anim(content):
         if content and content != error_message:
-            return {'display': 'block'}, {'display': 'block', 'height': '50vh', 'margin': 'auto'}, \
-                   {'display': 'none'}, True
+            return {'visibility': 'visible'}, {'display': 'none'}, True
         elif content == error_message:
-            return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}, True
-        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}, False
+            return {'display': 'none'}, {'display': 'none'}, True
+        return {'visibility': 'hidden'}, {'display': 'block'}, False
 
     @app.callback(
         Output('loading_text', 'children'),
@@ -516,8 +525,8 @@ def add_intervals_to_figure(transfer_fig: Union[go.Figure, dict], intervals: Lis
 def create_base_figure():
     fig = go.Figure(
         layout=go.Layout(
-            yaxis=go.layout.YAxis(scaleanchor='x', automargin=True),
-            xaxis=go.layout.XAxis(automargin=True),
+            yaxis=go.layout.YAxis(scaleanchor='x'),
+            xaxis=go.layout.XAxis(),
             showlegend=False
         )
     )
