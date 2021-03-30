@@ -114,7 +114,7 @@ def init_feeder(server):
                 ),
                 dcc.Interval(
                     id='loading_interval',
-                    interval=500,
+                    interval=1000,
                     disabled=False
                 )
             ],
@@ -200,7 +200,7 @@ def init_callbacks(app):
             if search and search[0] == '?':
                 search = search[1:]
 
-            ### TODO one display per session
+            # TODO one display per session
             d = displays.get(search, None)
             trigger = ctx.triggered[0]['prop_id'].split('.')[0]
             if trigger == 'anim_selector' and value == stop:
@@ -239,7 +239,7 @@ def init_callbacks(app):
         if search and search[0] == '?':
             search = search[1:]
 
-        if displays[search]:
+        if search in displays:
             progress = len(displays[search][load_key]) / 18 * 100
             return displays[search][load_key], round(progress), f'{round(progress)}%'
 
@@ -398,7 +398,7 @@ def create_function_figure(func_callable, minima, maxima, domain=(0, 2 * np.pi))
                 tickvals=np.linspace(*domain, steps),
                 ticktext=utils.generate_latex_text(domain[0], steps),
                 range=domain,
-                fixedrange=True
+                # fixedrange=True
             ))
     )
 

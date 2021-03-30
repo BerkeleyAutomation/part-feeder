@@ -96,13 +96,15 @@ pg = dcc.Markdown('''
 anim = dcc.Markdown(r'''
     ## The Animation
     
-    Now let's take a look at the algorithm in action! The algorithm, using information computed from the
-    series of plots above, generates a series of squeezing actions that orient the part *up to symmetry*.
-    For most arbitrary polygons with no rotational symmetry, this usually means that the part will be
+    Now let's take a look at the algorithm in action! The backchaining algorithm, using the intervals below the
+    axis on the transfer function plots above, generates a series of squeezing actions that orient the part 
+    *up to symmetry* for a squeeze plan and to a unique final orientation for a push-grasp plan.
+    For most arbitrary polygons with no rotational symmetry, up to symmetry usually means that the part will be
     oriented at some angle theta or theta+pi/2.
     
-    To view the animation, use the dropdown below to select the plan that you would like to see. Please note
-    that may take several seconds for the animation to begin, so please wait after you select an animation.
+    To view the animation, use the dropdown below to select the plan that you would like to see. The gripper angles
+    that the algorithm generates are shown above the grippers in degrees. Please note that may take several seconds 
+    for the animation to begin, so please wait after you select an animation.
     ''',
     style={'width': '70vw', 'margin': 'auto', 'text-align': 'center'}
 )

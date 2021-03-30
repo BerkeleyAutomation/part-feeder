@@ -1,4 +1,6 @@
 import math
+import numpy as np
+
 
 def generate_latex_text(start, steps):
     start = round(start/(math.pi/2))
@@ -15,3 +17,11 @@ def generate_latex_text(start, steps):
             ret.append(r'$$\frac{' + str(i) + r'\pi}{2}$$')
 
     return ret
+
+
+def generate_rotation_matrix(theta):
+    s, c = np.sin(theta), np.cos(theta)
+    matrix = np.array([[c, -s],
+                       [s, c]])
+
+    return matrix

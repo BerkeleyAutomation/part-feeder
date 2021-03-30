@@ -15,6 +15,8 @@ import plotly
 
 from typing import Tuple, List, Union
 
+from . import utils
+
 
 class Gripper:
     """A pair of parallel plate grippers"""
@@ -25,35 +27,28 @@ class Gripper:
     def __init__(self, x, y, angle, distance=200, length=200, velocity=50):
         # computing slope, slope of perpendicular
         self.angle = angle
-        self.slope = math.tan(angle)
-        self.orth_slope = -1 / self.slope if not np.isclose(0, self.slope) else -math.inf
         length, distance = length / 2, distance / 2
 
-        if math.isfinite(self.orth_slope):
-            # starting position offsets
-            self.x_offset = distance / math.sqrt(self.orth_slope ** 2 + 1)
-            self.y_offset = (self.orth_slope * distance) / math.sqrt(self.orth_slope ** 2 + 1)
+        # Gripper position vectors, vector in column 0 is the bottom gripper
+        rot_mat = utils.generate_rotation_matrix(angle)
+        offset_mat = np.dot(rot_mat, np.array([[0, 0], [-distance, distance]]))
+        pos_mat = np.array([[x], [y]]) + offset_mat
 
-            # squeeze velocity components, magnitude of velocity vector = velocity
-            self.vel_x = velocity / math.sqrt(self.orth_slope ** 2 + 1)
-            self.vel_y = velocity * self.orth_slope / math.sqrt(self.orth_slope ** 2 + 1)
-        else:
-            self.x_offset = 0
-            self.y_offset = distance
-
-            self.vel_x = 0
-            self.vel_y = velocity
+        # velocity of the bottom gripper (top gripper is just -vel_vec)
+        vel_vec = offset_mat[:, 1] - offset_mat[:, 0]
+        vel_vec /= np.linalg.norm(vel_vec)
+        vel_vec *= velocity
 
         # bottom gripper
-        self.bot_vel = Vec2d(self.vel_x, self.vel_y)  # squeeze velocity vector
-        self.bot_pos = Vec2d(x - self.x_offset, y - self.y_offset)  # starting position vector
+        self.bot_vel = Vec2d(*vel_vec)  # squeeze velocity vector
+        self.bot_pos = Vec2d(*pos_mat[:, 0])  # starting position vector
         self.bot: pymunk.Body
         self.bot_seg: pymunk.Segment
         self.bot, self.bot_seg = Gripper.make_gripper(self.bot_pos, length, angle)
 
         # top gripper
-        self.top_vel = -Vec2d(self.vel_x, self.vel_y)  # squeeze velocity vector
-        self.top_pos = Vec2d(x + self.x_offset, y + self.y_offset)  # starting position vector
+        self.top_vel = -Vec2d(*vel_vec)  # squeeze velocity vector
+        self.top_pos = Vec2d(*pos_mat[:, 1])  # starting position vector
         self.top: pymunk.Body
         self.top_seg: pymunk.Segment
         self.top, self.top_seg = Gripper.make_gripper(self.top_pos, length, angle)
@@ -181,7 +176,7 @@ class Display:
         self.display_pos = (len(angles) + 1) * spacing
 
         self.xlim = (self.start_pos, self.del_pos)
-        self.ylim = (-300, 300)
+        self.ylim = (-300, 400)
 
         self.space = pymunk.Space(threaded=True)
         self.space.threads = 2
@@ -272,7 +267,17 @@ class Display:
                     'showgrid': False,
                     'zeroline': False
                 },
-                'showlegend': False  # ,
+                'showlegend': False,
+                'annotations': [dict(x=x,
+                                     y=350,
+                                     text=str(round(a*180/np.pi)),
+                                     showarrow=False,
+                                     font=dict(
+                                         family="sans serif",
+                                         size=18,
+                                         color="black"
+                                     )) for x, a in zip(self.gripper_pos, self.angles)]
+                # ,
                 # 'title': str(np.around([g.distance() for g in self.grippers], 3)) +
                 # str(np.around([p.body.angle for p in self.polygons], 3))
                 # 'title': str(np.around(np.array(self.stop_rotate_angle)*180/math.pi, 3)) +
@@ -357,9 +362,7 @@ class Display:
         theta = shape.body.angle
 
         # rotation matrix
-        s, c = np.sin(theta), np.cos(theta)
-        matrix = np.array([[c, -s],
-                           [s, c]])
+        matrix = utils.generate_rotation_matrix(theta)
 
         # body position in world coordinates
         x, y = shape.body.position
@@ -599,9 +602,6 @@ class PushGraspDisplay(Display):
                     rel_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - p.body.angle % (2 * np.pi)) % (
                                 2 * np.pi)
 
-                    rel_angle_2 = (p.body.angle % (2 * np.pi) - self.grippers[row_idx][i].angle % (2 * np.pi)) % (
-                            2 * np.pi)
-
                     rel_push_output_angle = self.push_callable(rel_angle)
                     push_output_angle = (self.grippers[row_idx][i].angle % (2 * np.pi) - rel_push_output_angle) % (
                                 2 * np.pi)
@@ -649,7 +649,7 @@ class PushGraspDisplay(Display):
                             if collide_bot:
                                 g.bot.velocity = 0, 0
                                 stop = True
-                                # self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
+                                self.polygons[row_idx][i].body.angle = self.stop_push_angle[row_idx][i]
 
                     elif abs(g.bot.position.get_distance(g.bot_pos) - self.gripper_push_dist[row_idx][i]) < 3:
                         stop = True
