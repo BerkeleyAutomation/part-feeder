@@ -5,9 +5,10 @@ Thesis [Orienting Polygonal Parts Without Sensors (1993)](https://goldberg.berke
 which describes an algorithm for computing a series of squeeze actions that orient polygonal parts
 *up to symmetry*. A Java implementation of the algorithm can be found [here](https://goldberg.berkeley.edu/part-feeder/),
 and for more background on the algorithm can be found [here](https://goldberg.berkeley.edu/feeder/)
-or by reading the thesis.
+or by reading the thesis. A deployment of this web application can be viewed here: 
+[https://rieff.bair.berkeley.edu/part-feeder](https://rieff.bair.berkeley.edu/part-feeder).
 
-This was written in Python using the [Flask](https://flask.palletsprojects.com/) 
+This is written in Python using the [Flask](https://flask.palletsprojects.com/) 
 web framework, [Dash](https://dash.plotly.com/) and [Plotly](https://plotly.com/python/) 
 for interactive web plotting, and [pymunk](http://www.pymunk.org/en/latest/) to simulate the squeeze
 actions for the animation.

@@ -17,6 +17,7 @@ from . import engine
 from . import explanations
 from . import anim
 from . import utils
+from .db import get_db
 
 displays = {}
 
@@ -91,10 +92,11 @@ def init_feeder(server):
                     style={'height': '50vh', 'margin': 'auto', 'display': 'block'},
                     config={'displayModeBar': False, 'staticPlot': True}
                 ),
-                html.Div(
+                dcc.Markdown(
                     id='contact',
-                    style={'text-align': 'center'},
-                    children='Questions? Contact us at: vincentklim AT berkeley.edu or goldberg AT berkeley.edu'
+                    style={'text-align': 'center', 'padding-top': '20px', 'padding-bottom': '20px'},
+                    children='''For questions, comments or other thoughts, contact us at: 
+                    *vincentklim {at} berkeley.edu* or *goldberg {at} berkeley.edu*'''
                 )
             ]
         ),
@@ -148,6 +150,17 @@ def init_callbacks(app):
         assert 'x' in points
         assert 'y' in points
         assert len(points['x']) == len(points['y'])
+
+        try:
+            db, Part = get_db()
+            dumps = json.dumps(points)
+            exists = Part.query.filter_by(points=dumps).first()
+            if not exists:
+                db.session.add(Part(points=dumps))
+                db.session.commit()
+        except Exception as e:
+            pass
+            # just so that the wip database does not affect anything for now.
 
         x = list(map(int, points['x']))
         y = list(map(int, points['y']))
@@ -207,7 +220,7 @@ def init_callbacks(app):
                 return [], True, True, prev
 
             # selector has not changed. continue calling for data.
-            elif d and value != stop and d.get(value):
+            elif d and value != stop and value in d:
                 return d.get(value).step_draw(loops=loops), False, False, value
         # print('I got here! disabling update intervals. ')
         if value == stop:
@@ -516,8 +529,7 @@ def add_intervals_to_figure(transfer_fig: Union[go.Figure, dict], intervals: Lis
     xdomain, xpos = domain_and_position(transfer_fig.layout.xaxis.range)
     ydomain, ypos = domain_and_position(transfer_fig.layout.yaxis.range)
 
-    transfer_fig.update_layout(xaxis_range=xdomain, # xaxis_position=xpos,
-                               yaxis_range=ydomain) #, yaxis_position=ypos)
+    transfer_fig.update_layout(xaxis_range=xdomain, yaxis_range=ydomain)
 
     return transfer_fig
 

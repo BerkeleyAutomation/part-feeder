@@ -1,13 +1,16 @@
-import os
-
 from flask import Flask
 from . import feeder
 from .feeder import init_feeder
+from .gallery import init_gallery
 
 
 def create_app():
     # create and configure the app
     app = Flask(__name__)
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///parts.db'
+
+    from .db import set_db
+    set_db(app)
 
     @app.route('/part-feeder/')
     def root():
@@ -19,5 +22,6 @@ def create_app():
 
     with app.app_context():
         app = init_feeder(app)
+        app = init_gallery(app)
 
     return app
