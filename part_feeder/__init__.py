@@ -8,6 +8,7 @@ def create_app():
     # create and configure the app
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///persist/parts.db'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     from .db import set_db
     set_db(app)
