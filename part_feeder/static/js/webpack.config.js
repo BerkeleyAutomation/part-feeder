@@ -6,10 +6,7 @@ module.exports = {
         path: path.resolve(__dirname, '../../assets'),
         filename: 'bundle.js',
     },
-    mode: "development",
-    optimization: {
-        minimize: false,
-    },
+    mode: "production",
     module: {
         rules: [
             {
