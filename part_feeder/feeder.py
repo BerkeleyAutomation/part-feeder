@@ -2,7 +2,7 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output, State, ClientsideFunction
 
 import plotly
 import plotly.graph_objs as go
@@ -33,6 +33,7 @@ error_message = 'Error! Polygon vertices not correctly specified. Please go back
 def init_feeder(server):
     """Create the plots using plotly and dash."""
     dash_app = dash.Dash(
+        __name__,
         server=server,
         routes_pathname_prefix='/part-feeder/feeder/',
         update_title=None,
@@ -49,11 +50,10 @@ def init_feeder(server):
             children=[
                 html.Div(
                     id='plots',
-                    # style={'font-family': '"Times New Roman", Times, serif'}
                 ),  # this displays all the plots and explanations
                 dcc.Interval(
                     id='data_update_interval',
-                    interval=10_000,
+                    interval=8_000,
                     disabled=False
                 ),
                 dcc.Interval(
@@ -73,6 +73,16 @@ def init_feeder(server):
                 ),
                 dcc.Store(
                     id='prev_anim',
+                    storage_type='memory',
+                ),
+                dcc.Store(                  # holds information like the plans, transfer functions, etc.
+                    id='anim_state',
+                    data={},
+                    storage_type='memory'
+                ),
+                dcc.Store(                  # holds the angles of all the polygons the last time this was queried.
+                    id='anim_angles',
+                    data={'sqPolygonAngles': [], 'pgPolygonAngles': []},
                     storage_type='memory'
                 ),
                 dcc.Dropdown(  # dropdown selector to determine which animation to display.
@@ -133,6 +143,7 @@ def init_feeder(server):
 def init_callbacks(app):
     @app.callback(
         Output('plots', 'children'),
+        Output('anim_state', 'data'),
         Input('url', 'search'))
     def display_feeder(search: str):
         """
@@ -195,38 +206,22 @@ def init_callbacks(app):
         State('prev_anim', 'data')
     )
 
-    @app.callback(
+    app.clientside_callback(
+        ClientsideFunction(
+            namespace='clientside',
+            function_name='updateAnim'
+        ),
         Output('anim_holding_data', 'data'),
+        Output('anim_angles', 'data'),
         Output('data_update_interval', 'disabled'),
         Output('anim_update_interval', 'disabled'),
         Output('prev_anim', 'data'),
         Input('data_update_interval', 'n_intervals'),
         Input('anim_selector', 'value'),
-        State('url', 'search'),
+        State('anim_state', 'data'),
+        State('anim_angles', 'data'),
         State('prev_anim', 'data')
     )
-    def update_anim_data(n, value, search, prev):
-        loops = 5
-        ctx = dash.callback_context
-
-        if ctx.triggered:
-            if search and search[0] == '?':
-                search = search[1:]
-
-            # TODO one display per session
-            d = displays.get(search, None)
-            trigger = ctx.triggered[0]['prop_id'].split('.')[0]
-            if trigger == 'anim_selector' and value == stop:
-                return [], True, True, prev
-
-            # selector has not changed. continue calling for data.
-            elif d and value != stop and value in d:
-                return d.get(value).step_draw(loops=loops), False, False, value
-        # print('I got here! disabling update intervals. ')
-        if value == stop:
-            return [], True, True, prev
-        else:
-            return [], False, False, value
 
     @app.callback(
         Output('page-content', 'style'),
@@ -358,13 +353,25 @@ def create_page(points, hash_str):
                                 offset=pg_domain[0]-pad*(pg_domain[1]-pg_domain[0]), increment=0.2), 'pg_fig')
     update_loading_done(hash_str)
 
+    state = {
+        'points': [dict(zip(('x', 'y',), p)) for p in points],
+        'convexhull': [dict(zip(('x', 'y',), p)) for p in ch],
+        'sqPlan': sq_plan,
+        'pgPlan': pg_plan,
+        'squeezeFunc': squeeze_func,
+        'diameterFunc': bounded_piecewise_diameter,
+        'radiusFunc': bounded_piecewise_radius,
+        'pushFunc': push_func,
+        'pushGraspFunc': push_grasp_func
+    }
+
     return [explanations.ch_ap, ch_ap_graph,
             explanations.dia, dia_graph,
             explanations.sq, sq_graph,
             explanations.rad, rad_graph,
             explanations.pu, pu_graph,
             explanations.pg, pg_graph,
-            explanations.anim]
+            explanations.anim], state
 
 
 def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):

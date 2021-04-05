@@ -7,7 +7,7 @@ from .gallery import init_gallery
 def create_app():
     # create and configure the app
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///parts.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///persist/parts.db'
 
     from .db import set_db
     set_db(app)
@@ -16,9 +16,13 @@ def create_app():
     def root():
         return app.send_static_file('index.html')
 
+    from .db import get_db
+
     @app.route('/part-feeder/len/')
     def num_obs():
-        return {'len': len(feeder.displays)}
+        _, Part = get_db()
+        return {'len': Part.query.count()}
+        # return {'len': len(feeder.displays)}
 
     with app.app_context():
         app = init_feeder(app)

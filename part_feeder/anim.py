@@ -178,7 +178,7 @@ class Display:
         self.xlim = (self.start_pos, self.del_pos)
         self.ylim = (-300, 400)
 
-        self.space = pymunk.Space(threaded=True)
+        self.space = pymunk.Space()
         self.space.threads = 2
         self.space.gravity = 0, 0
         self.space.damping = 1

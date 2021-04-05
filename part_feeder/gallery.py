@@ -102,7 +102,7 @@ def init_gallery(app):
                 ret_idx -= grid ** 2
 
         db, Part = get_db()
-        next_disabled = ret_idx + grid ** 2 > Part.query.count()
+        next_disabled = ret_idx + grid ** 2 >= Part.query.count()
         prev_disabled = ret_idx == 0
 
         return ret_idx, next_disabled, prev_disabled
