@@ -4,6 +4,8 @@ import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State, ClientsideFunction
 
+from flask import request
+
 import plotly
 import plotly.graph_objs as go
 
@@ -140,6 +142,10 @@ def init_feeder(server):
     return dash_app.server
 
 
+def get_request_hash(search_str):
+    return utils.get_hash(search_str, request.remote_addr, request.headers.get("User-Agent"))
+
+
 def init_callbacks(app):
     @app.callback(
         Output('plots', 'children'),
@@ -149,6 +155,7 @@ def init_callbacks(app):
         """
         This parses a list of vertices describing a polygon from the query string in the URL.
         """
+        search_str = search
         if search and search[0] == '?':
             search = search[1:]
         if not search:
@@ -179,7 +186,7 @@ def init_callbacks(app):
         points = np.hstack((np.array(x).reshape((-1, 1)), np.array(y).reshape((-1, 1))))
         points = engine.scale_and_center_polygon(points)
 
-        return create_page(points, search)
+        return create_page(points, get_request_hash(search_str))
 
     app.clientside_callback(  # This clientside callback is a little bit of a hack but it works.
         """
@@ -227,10 +234,12 @@ def init_callbacks(app):
         Output('page-content', 'style'),
         Output('loading_div', 'style'),
         Output('loading_interval', 'disabled'),
-        Input('plots', 'children')
+        Input('plots', 'children'),
+        State('url', 'search')
     )
-    def show_anim(content):
+    def show_anim(content, search_str):
         if content and content != error_message:
+            del displays[get_request_hash(search_str)]
             return {'visibility': 'visible'}, {'display': 'none'}, True
         elif content == error_message:
             return {'display': 'none'}, {'display': 'none'}, True
@@ -243,10 +252,8 @@ def init_callbacks(app):
         Input('loading_interval', 'n_intervals'),
         State('url', 'search')
     )
-    def pbar(_, search):
-        if search and search[0] == '?':
-            search = search[1:]
-
+    def pbar(_, search_str):
+        search = get_request_hash(search_str)
         if search in displays:
             progress = len(displays[search][load_key]) / 18 * 100
             return displays[search][load_key], round(progress), f'{round(progress)}%'
@@ -326,10 +333,7 @@ def create_page(points, hash_str):
 
     # create display
     update_loading(hash_str, 'Generating animation simulator')
-    d1 = anim.SqueezeDisplay(points, sq_plan, diameter_callable, squeeze_callable)
-    d2 = anim.PushGraspDisplay(points, pg_plan, radius_callable, diameter_callable, push_callable, push_grasp_callable)
-    displays[hash_str][sq_anim] = d1
-    displays[hash_str][pg_anim] = d2
+    # ported to javascript!
     update_loading_done(hash_str)
 
     # Create figures

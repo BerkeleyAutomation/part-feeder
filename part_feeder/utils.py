@@ -1,3 +1,4 @@
+import hashlib
 import math
 import numpy as np
 
@@ -25,3 +26,8 @@ def generate_rotation_matrix(theta):
                        [s, c]])
 
     return matrix
+
+
+def get_hash(*args):
+    encode = '|'.join(args).encode(encoding='UTF-8', errors='replace')
+    return hashlib.md5(encode).hexdigest()

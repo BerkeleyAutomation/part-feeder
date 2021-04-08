@@ -257,7 +257,7 @@ class Display {
         drawPoints.x.push(drawPoints.x[0]);
         drawPoints.y.push(drawPoints.y[0]);
 
-        let line = {x: drawPoints.x.slice(2), y: drawPoints.y.slice(2)};
+        let line = {x: drawPoints.x.slice(0, 2), y: drawPoints.y.slice(0, 2)};
         this.thickLine = 0;
         let dist = function (points) {
             return planck.Vec2.lengthOf(planck.Vec2.sub(
@@ -265,7 +265,7 @@ class Display {
                 planck.Vec2(points.x[1], points.y[1])
             ));
         }
-        for (let i = 0; i < drawPoints.length - 1; i++) {
+        for (let i = 0; i < drawPoints.x.length - 1; i++) {
             let candidate = {x: drawPoints.x.slice(i, i + 2), y: drawPoints.y.slice(i, i + 2)};
             if (dist(candidate) > dist(line)) {
                 line = candidate;
