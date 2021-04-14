@@ -140,3 +140,5 @@ cython_debug/
 *.db
 
 node_modules/
+
+.idea/

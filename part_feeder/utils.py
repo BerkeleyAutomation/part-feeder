@@ -20,6 +20,13 @@ def generate_latex_text(start, steps):
     return ret
 
 
+def generate_degree_text(domain, steps, rad=True):
+    if rad:
+        domain = [round(i*180/np.pi) for i in domain]
+
+    return np.linspace(domain[0], domain[1], steps, dtype=np.int32)
+
+
 def generate_rotation_matrix(theta):
     s, c = np.sin(theta), np.cos(theta)
     matrix = np.array([[c, -s],

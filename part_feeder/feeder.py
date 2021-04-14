@@ -274,6 +274,8 @@ def create_page(points, hash_str):
     s_domain = (0, 2 * np.pi)  # s_domain refers to all squeeze function related domains
     pg_domain = (0, 4 * np.pi)  # pg_domain refers to all push-grasp function related domains
 
+    latex = request.user_agent.browser != 'firefox'  # mathjax latex rendering is broken on firefox
+
     displays[hash_str] = {load_key: []}
 
     ch = engine.convex_hull(points)
@@ -342,18 +344,18 @@ def create_page(points, hash_str):
     ch_ap_graph = create_graph_from_figure(
         create_antipodal_pairs_figure(points, ch, antipodal_pairs), 'ch_ap_fig')
     dia_graph = create_graph_from_figure(
-        create_function_figure(diameter_callable, diameter_minima, diameter_maxima, s_domain), 'dia_fig')
+        create_function_figure(diameter_callable, diameter_minima, diameter_maxima, s_domain, latex), 'dia_fig')
     sq_graph = create_graph_from_figure(
-        add_intervals_to_figure(create_transfer_figure(squeeze_callable, s_domain), sq_intervals,
+        add_intervals_to_figure(create_transfer_figure(squeeze_callable, s_domain, latex), sq_intervals,
                                 offset=s_domain[0]-pad*(s_domain[1]-s_domain[0])), 'sq_fig')
 
     rad_graph = create_graph_from_figure(
-        create_function_figure(radius_callable, radius_minima, radius_maxima, pg_domain), 'rad_fig')
+        create_function_figure(radius_callable, radius_minima, radius_maxima, pg_domain, latex), 'rad_fig')
     pu_graph = create_graph_from_figure(
-        create_transfer_figure(push_callable, pg_domain), 'pu_fig')
+        create_transfer_figure(push_callable, pg_domain, latex), 'pu_fig')
 
     pg_graph = create_graph_from_figure(
-        add_intervals_to_figure(create_transfer_figure(push_grasp_callable, pg_domain), pg_intervals,
+        add_intervals_to_figure(create_transfer_figure(push_grasp_callable, pg_domain, latex), pg_intervals,
                                 offset=pg_domain[0]-pad*(pg_domain[1]-pg_domain[0]), increment=0.2), 'pg_fig')
     update_loading_done(hash_str)
 
@@ -412,15 +414,16 @@ def create_antipodal_pairs_figure(points, convex_hull, antipodal_pairs):
     return fig
 
 
-def create_function_figure(func_callable, minima, maxima, domain=(0, 2 * np.pi)):
+def create_function_figure(func_callable, minima, maxima, domain=(0, 2 * np.pi), latex=True):
     steps = round((domain[1] - domain[0]) / (np.pi / 2)) + 1
+    ticktext = utils.generate_latex_text(domain[0], steps) if latex else utils.generate_degree_text(domain, steps)
     fig = go.Figure(
         layout=go.Layout(
             showlegend=False,
             xaxis=go.layout.XAxis(
                 tickmode='array',
                 tickvals=np.linspace(*domain, steps),
-                ticktext=utils.generate_latex_text(domain[0], steps),
+                ticktext=ticktext,
                 range=domain,
                 # fixedrange=True
             ))
@@ -457,7 +460,7 @@ def create_function_figure(func_callable, minima, maxima, domain=(0, 2 * np.pi))
     return fig
 
 
-def create_transfer_figure(transfer_callable, domain=(0, 2 * np.pi)):
+def create_transfer_figure(transfer_callable, domain=(0, 2 * np.pi), latex=True):
     x = np.linspace(*domain, 1000)
     y = np.array([transfer_callable(t) for t in x])
 
@@ -471,6 +474,8 @@ def create_transfer_figure(transfer_callable, domain=(0, 2 * np.pi)):
     xdomain_padded = padded_domain(*domain, pad=0)
     ydomain_padded = padded_domain(min(domain[0], *y), max(domain[1], *y))
 
+    ticktext = utils.generate_latex_text(domain[0], steps) if latex else utils.generate_degree_text(domain, steps)
+
     fig = create_base_figure()
     fig.update_layout(
         yaxis=go.layout.YAxis(
@@ -478,14 +483,14 @@ def create_transfer_figure(transfer_callable, domain=(0, 2 * np.pi)):
             scaleratio=1,
             tickmode='array',
             tickvals=np.linspace(*domain, steps),
-            ticktext=utils.generate_latex_text(domain[0], steps),
+            ticktext=ticktext,
             range=ydomain_padded,
             zerolinecolor='#A9A9A9'
         ),
         xaxis=go.layout.XAxis(
             tickmode='array',
             tickvals=np.linspace(*domain, steps),
-            ticktext=utils.generate_latex_text(domain[0], steps),
+            ticktext=ticktext,
             range=xdomain_padded,
             zerolinecolor='#A9A9A9'
         ),
